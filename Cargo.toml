@@ -1,0 +1,14 @@
+[package]
+name = "flying-dragon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+winit = "0.28"
+env_logger = "0.10"
+log = "0.4"
+wgpu = "^0.18"
+bytemuck = { version = "1.12", features = [ "derive" ] }
+pollster = "0.3.0"
+glam = "0.24.2"
+rand = "0.8.5"

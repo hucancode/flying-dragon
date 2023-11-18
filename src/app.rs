@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::time::Instant;
 use winit::window::Window;
 
-const LIGHT_RADIUS: f32 = 5.0;
+const LIGHT_RADIUS: f32 = 50.0;
 const LIGHT_INTENSITY: f32 = 10.5;
 
 pub struct App {
@@ -31,7 +31,7 @@ impl App {
             include_str!("material/shader.wgsl"),
         ));
         let dragon_mesh = Rc::new(Mesh::load_obj(
-            include_bytes!("assets/orca.obj"),
+            include_bytes!("assets/dragon.obj"),
             &self.renderer.device,
         ));
         self.renderer

@@ -42,6 +42,7 @@ impl Mesh {
                 let mesh = model.mesh;
                 // println!("pos: {:?}", mesh.positions);
                 // println!("index: {:?}", mesh.indices);
+                let offset = vertices.len();
                 let n = mesh.positions.len();
                 for i in 0..n / 3 {
                     let i = i * 3;
@@ -66,7 +67,7 @@ impl Mesh {
                     vertices.push(Vertex::new(pos, nor, col));
                 }
                 for i in mesh.indices {
-                    indices.push(i as u16);
+                    indices.push(offset as u16 + i as u16);
                 }
             }
             Self::new(vertices, indices, device)

@@ -3,7 +3,7 @@ use crate::material::Shader;
 use crate::world::{new_entity, new_light, Node, NodeRef, Renderer};
 use glam::Vec4;
 use std::f32::consts::PI;
-use std::sync::Arc;
+use std::rc::Rc;
 use std::time::Instant;
 use winit::window::Window;
 
@@ -25,11 +25,12 @@ impl App {
     }
     pub fn init(&mut self) {
         let app_init_timestamp = Instant::now();
-        let cube_mesh = Arc::new(Mesh::new_cube(0xcba6f7ff, &self.renderer.device));
-        let shader = Arc::new(Shader::new(
+        let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &self.renderer.device));
+        let shader = Rc::new(Shader::new(
             &self.renderer.device,
             include_str!("material/shader.wgsl"),
         ));
+        let dragon_mesh = Rc::new(Mesh::load_obj(include_str!("assets/orca.obj"), &self.renderer.device));
         let lights = vec![
             (
                 wgpu::Color {

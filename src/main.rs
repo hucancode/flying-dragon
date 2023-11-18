@@ -1,4 +1,4 @@
-use rubik::run;
+use flying_dragon::run;
 use winit::event_loop::EventLoop;
 use winit::window::Window;
 fn main() {

@@ -24,9 +24,9 @@ use winit::window::Window;
 const MAX_ENTITY: u64 = 100000;
 const MAX_LIGHT: u64 = 10;
 const CLEAR_COLOR: Color = Color {
-    r: 0.00633333333,
-    g: 0.00633333333,
-    b: 0.01388235294,
+    r: 0.01233333333,
+    g: 0.01233333333,
+    b: 0.02388235294,
     a: 1.0,
 };
 const CAMERA_DISTANCE: f32 = 10.0;

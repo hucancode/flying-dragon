@@ -7,8 +7,8 @@ use std::rc::Rc;
 use std::time::Instant;
 use winit::window::Window;
 
-const LIGHT_RADIUS: f32 = 10.0;
-const LIGHT_INTENSITY: f32 = 2.5;
+const LIGHT_RADIUS: f32 = 5.0;
+const LIGHT_INTENSITY: f32 = 10.5;
 
 pub struct App {
     renderer: Renderer,
@@ -30,7 +30,13 @@ impl App {
             &self.renderer.device,
             include_str!("material/shader.wgsl"),
         ));
-        let dragon_mesh = Rc::new(Mesh::load_obj(include_str!("assets/orca.obj"), &self.renderer.device));
+        let dragon_mesh = Rc::new(Mesh::load_obj(
+            include_bytes!("assets/orca.obj"),
+            &self.renderer.device,
+        ));
+        self.renderer
+            .root
+            .add_child(new_entity(dragon_mesh.clone(), shader.clone()));
         let lights = vec![
             (
                 wgpu::Color {
@@ -83,13 +89,13 @@ impl App {
     pub fn update(&mut self, delta_time: f32, time: u128) {
         for (light, cube, time_offset) in self.lights.iter_mut() {
             let time = time + *time_offset;
-            let rx = PI * 2.0 * ((time as f64) * 0.00042).sin() as f32;
-            let ry = PI * 2.0 * ((time as f64) * 0.00011).sin() as f32;
-            let rz = PI * 2.0 * ((time as f64) * 0.00027).sin() as f32;
+            let rx = PI * 2.0 * (0.00042 * time as f64).sin() as f32;
+            let ry = PI * 2.0 * (0.00011 * time as f64).sin() as f32;
+            let rz = PI * 2.0 * (0.00027 * time as f64).sin() as f32;
             cube.rotate(rx, ry, rz);
-            let x = 4.0 * (time as f64 / 1700.0).sin() as f32;
-            let y = 4.0 * (time as f64 / 1300.0).sin() as f32;
-            let z = 4.0 * (time as f64 / 700.0).sin() as f32;
+            let x = 4.0 * (0.00058 * time as f64).sin() as f32;
+            let y = 4.0 * (0.00076 * time as f64).sin() as f32;
+            let z = 4.0 * (0.00142 * time as f64).sin() as f32;
             let v = Vec4::new(x, y, z, 1.0).normalize() * LIGHT_RADIUS;
             light.translate(v.x, v.y, v.z);
         }

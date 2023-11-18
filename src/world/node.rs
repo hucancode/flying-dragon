@@ -1,7 +1,7 @@
 use crate::geometry::Mesh;
 use crate::material::Shader;
 use glam::{f32::Quat, EulerRot, Mat4, Vec3};
-use std::{rc::Rc, cell::RefCell};
+use std::{cell::RefCell, rc::Rc};
 
 pub enum Variant {
     Entity(Rc<Mesh>, Rc<Shader>),
@@ -74,7 +74,7 @@ pub trait Node {
     fn extract_child_if<F>(&mut self, filter: F) -> Vec<NodeRef>
     where
         F: Fn(&NodeRef) -> bool;
-    fn extract_child(&mut self) -> Vec<NodeRef> {
+    fn extract_all_child(&mut self) -> Vec<NodeRef> {
         self.extract_child_if(|_| true)
     }
 }
@@ -142,7 +142,7 @@ impl Node for NodeData {
         }
         ret
     }
-    fn extract_child(&mut self) -> Vec<NodeRef> {
+    fn extract_all_child(&mut self) -> Vec<NodeRef> {
         let ret = self.children.clone();
         self.children = Vec::new();
         ret
@@ -205,7 +205,7 @@ impl Node for NodeRef {
     {
         self.borrow_mut().extract_child_if(filter)
     }
-    fn extract_child(&mut self) -> Vec<NodeRef> {
-        self.borrow_mut().extract_child()
+    fn extract_all_child(&mut self) -> Vec<NodeRef> {
+        self.borrow_mut().extract_all_child()
     }
 }

@@ -56,7 +56,7 @@ impl Mesh {
                         mesh.positions[i + 1],
                         mesh.positions[i + 2],
                     ];
-                    let nor = if mesh.normal_indices.len() <= i + 2 {
+                    let nor = if mesh.normals.len() <= i + 2 {
                         [0.0, 0.0, 1.0]
                     } else {
                         [mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]]

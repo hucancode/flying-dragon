@@ -3,6 +3,7 @@ use crate::material::Shader;
 use crate::world::{node, Camera, Light, Node, NodeRef};
 use glam::{Mat4, Vec4};
 use std::cmp::max;
+use std::f32::consts::PI;
 use std::mem::size_of;
 use std::time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
@@ -34,6 +35,7 @@ const CAMERA_DISTANCE: f32 = 50.0;
 pub struct Renderer {
     pub camera: Camera,
     pub root: NodeRef,
+    pub time: f32,
     config: SurfaceConfiguration,
     surface: Surface,
     pub device: Device,
@@ -45,6 +47,7 @@ pub struct Renderer {
     vp_buffer: Buffer,
     w_buffer: Buffer,
     r_buffer: Buffer,
+    displacement_offset_buffer: Buffer,
     light_buffer: Buffer,
     light_count_buffer: Buffer,
 }
@@ -168,14 +171,30 @@ impl Renderer {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                BindGroupLayoutEntry {
+                    binding: 4, // displacement offset
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(4 * size_of::<f32>() as u64),
+                    },
+                    count: None,
+                },
             ],
         });
         let create_texels = |size| {
-            (0..size)
-                .map(|x| (((0.1 * x as f32).sin() + 1.0) * 128.0) as u8)
-                .collect::<Vec<u8>>()
+            let mut ret = Vec::new();
+            for i in 0..size {
+                let i = PI * 2.0 * i as f32 / size as f32;
+                ret.push(((i.sin() + 1.0) * 128.0) as u8);
+                ret.push(0);
+                ret.push(((i.cos() + 1.0) * 128.0) as u8);
+                ret.push(0);
+            }
+            ret
         };
-        let size = 256u32;
+        let size = 32u32;
         let texels = create_texels(size);
         // println!("{:?}", texels);
         let texture_extent = Extent3d {
@@ -189,7 +208,7 @@ impl Renderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::R8Unorm,
+            format: TextureFormat::Rgba8Unorm,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -200,26 +219,31 @@ impl Renderer {
             &texels,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(size),
+                bytes_per_row: Some(size * 4),
                 rows_per_image: None,
             },
             texture_extent,
         );
         let displacement_sampler = device.create_sampler(&SamplerDescriptor {
             address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::Repeat,
+            address_mode_w: AddressMode::Repeat,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Nearest,
             mipmap_filter: FilterMode::Nearest,
             ..Default::default()
+        });
+        let displacement_offset_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("Displacement Offset"),
+            size: 4 * size_of::<f32>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
             push_constant_ranges: &[],
         });
-
         let shader = Shader::new(&device, include_str!("../material/shader-displaced.wgsl"));
         println!("created shader in {:?}", new_shader_timestamp.elapsed());
         let new_pipeline_timestamp = Instant::now();
@@ -342,13 +366,17 @@ impl Renderer {
                         size: BufferSize::new(node_uniform_size),
                     }),
                 },
-                wgpu::BindGroupEntry {
+                BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&displacement_texture_view),
+                    resource: BindingResource::TextureView(&displacement_texture_view),
                 },
-                wgpu::BindGroupEntry {
+                BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::Sampler(&displacement_sampler),
+                    resource: BindingResource::Sampler(&displacement_sampler),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: displacement_offset_buffer.as_entire_binding(),
                 },
             ],
             label: None,
@@ -372,6 +400,8 @@ impl Renderer {
             vp_buffer,
             w_buffer,
             r_buffer,
+            displacement_offset_buffer,
+            time: 0.0,
             light_buffer,
             light_count_buffer,
         }
@@ -490,6 +520,11 @@ impl Renderer {
                     self.device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
                 align_to(node_uniform_size, alignment)
             };
+            self.queue.write_buffer(
+                &self.displacement_offset_buffer,
+                0,
+                bytemuck::bytes_of(&[self.time * 0.5, 0.0, 0.0, 0.0]),
+            );
             for (i, (geometry, _shader, transform, rotation)) in nodes.iter().enumerate() {
                 let offset = (node_uniform_aligned * i as u64) as BufferAddress;
                 self.queue.write_buffer(

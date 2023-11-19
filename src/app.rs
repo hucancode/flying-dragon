@@ -35,7 +35,7 @@ impl App {
             &self.renderer.device,
         ));
         let mut dragon = new_entity(dragon_mesh.clone(), shader.clone());
-        dragon.translate_x(40.0);
+        dragon.translate_x(-60.0);
         dragon.rotate_x(PI * 1.5);
         self.renderer.root.add_child(dragon);
         let lights = vec![
@@ -100,6 +100,7 @@ impl App {
             let v = Vec4::new(x, y, z, 1.0).normalize() * LIGHT_RADIUS;
             light.translate(v.x, v.y, v.z);
         }
+        self.renderer.time += delta_time;
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {

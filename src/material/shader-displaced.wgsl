@@ -24,17 +24,21 @@ var<uniform> rotation: mat4x4<f32>;
 var displacement_map: texture_2d<f32>;
 @group(0) @binding(3)
 var displacement_sampler: sampler;
+@group(0) @binding(4)
+var<uniform> displacement_offset: vec4<f32>;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
-
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
-    let displacement = textureSampleLevel(displacement_map, displacement_sampler, input.position.xy*0.004, 0.0);
-    let dy = displacement.r*20.0;
+    var uv = (input.position*0.003+displacement_offset).xy;
+    let displacement = textureSampleLevel(displacement_map, displacement_sampler, uv, 0.0);
+    let dx = displacement.x*120.0 - input.position.x;
+    let dy = displacement.y*120.0;
+    let dz = displacement.z*120.0;
     result.color = input.color;
-    result.world_position = world * (input.position + vec4f(0.0, dy, 0.0, 0.0));
+    result.world_position = world * (input.position + vec4f(dx, dy, dz, 0.0));
     result.position = view_proj * result.world_position;
     result.normal = rotation * input.normal;
     return result;

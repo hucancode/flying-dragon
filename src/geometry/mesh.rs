@@ -34,7 +34,6 @@ impl Mesh {
         if let Ok((models, _materials)) = tobj::load_obj_buf(
             &mut reader,
             &tobj::LoadOptions {
-                triangulate: true,
                 single_index: true,
                 ..Default::default()
             },

@@ -161,7 +161,7 @@ impl Renderer {
             push_constant_ranges: &[],
         });
 
-        let shader = Shader::new(&device, include_str!("../material/shader.wgsl"));
+        let shader = Shader::new(&device, include_str!("../material/shader-displaced.wgsl"));
         println!("created shader in {:?}", new_shader_timestamp.elapsed());
         let new_pipeline_timestamp = Instant::now();
 
@@ -440,7 +440,7 @@ impl Renderer {
                     &self.bind_group_node,
                     &[offset as DynamicOffset, offset as DynamicOffset],
                 );
-                rpass.set_index_buffer(geometry.index_buffer.slice(..), IndexFormat::Uint16);
+                rpass.set_index_buffer(geometry.index_buffer.slice(..), IndexFormat::Uint32);
                 rpass.set_vertex_buffer(0, geometry.vertex_buffer.slice(..));
                 let n = geometry.indices.len() as u32;
                 rpass.draw_indexed(0..n, 0, 0..1);

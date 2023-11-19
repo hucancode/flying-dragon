@@ -28,7 +28,7 @@ impl App {
         let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &self.renderer.device));
         let shader = Rc::new(Shader::new(
             &self.renderer.device,
-            include_str!("material/shader.wgsl"),
+            include_str!("material/shader-displaced.wgsl"),
         ));
         let dragon_mesh = Rc::new(Mesh::load_obj(
             include_bytes!("assets/dragon.obj"),

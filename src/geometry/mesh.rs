@@ -5,13 +5,13 @@ use wgpu::{Buffer, BufferUsages, Device};
 
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
-    pub indices: Vec<u16>,
+    pub indices: Vec<u32>,
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
 }
 
 impl Mesh {
-    pub fn new(vertices: Vec<Vertex>, indices: Vec<u16>, device: &Device) -> Self {
+    pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>, device: &Device) -> Self {
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertices),
@@ -31,17 +31,22 @@ impl Mesh {
     }
     pub fn load_obj(source: &[u8], device: &Device) -> Self {
         let mut reader = BufReader::new(source);
-        if let Ok((models, _materials)) =
-            tobj::load_obj_buf(&mut reader, &tobj::LoadOptions::default(), |_matpath| {
-                Err(tobj::LoadError::GenericFailure)
-            })
-        {
+        if let Ok((models, _materials)) = tobj::load_obj_buf(
+            &mut reader,
+            &tobj::LoadOptions {
+                triangulate: true,
+                single_index: true,
+                ..Default::default()
+            },
+            |_matpath| Err(tobj::LoadError::GenericFailure),
+        ) {
             let mut vertices = Vec::new();
             let mut indices = Vec::new();
             for model in models {
                 let mesh = model.mesh;
-                // println!("pos: {:?}", mesh.positions);
-                // println!("index: {:?}", mesh.indices);
+                // println!("pos: {:?}", mesh.positions.len());
+                // println!("index: {:?}", mesh.normal_indices.len());
+                // println!("index: {:?}", mesh.indices.len());
                 let offset = vertices.len();
                 let n = mesh.positions.len();
                 for i in 0..n / 3 {
@@ -54,20 +59,13 @@ impl Mesh {
                     let nor = if mesh.normal_indices.len() <= i + 2 {
                         [0.0, 0.0, 1.0]
                     } else {
-                        let i1 = mesh.normal_indices[i];
-                        let i2 = mesh.normal_indices[i + 1];
-                        let i3 = mesh.normal_indices[i + 2];
-                        [
-                            mesh.normals[i1 as usize],
-                            mesh.normals[i2 as usize],
-                            mesh.normals[i3 as usize],
-                        ]
+                        [mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]]
                     };
                     let col = 0xffff00ff;
                     vertices.push(Vertex::new(pos, nor, col));
                 }
                 for i in mesh.indices {
-                    indices.push(offset as u16 + i as u16);
+                    indices.push(offset as u32 + i as u32);
                 }
             }
             Self::new(vertices, indices, device)

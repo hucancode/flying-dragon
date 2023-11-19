@@ -7,17 +7,17 @@ use std::mem::size_of;
 use std::time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, Color, CommandEncoderDescriptor,
     CompareFunction, DepthBiasState, DepthStencilState, Device, DeviceDescriptor, DynamicOffset,
-    Extent3d, Face, Features, FragmentState, FrontFace, IndexFormat, Instance, Limits, LoadOp,
-    MultisampleState, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode,
+    Extent3d, Face, Features, FilterMode, FragmentState, FrontFace, IndexFormat, Instance, Limits,
+    LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode,
     PrimitiveState, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
-    ShaderStages, StencilState, StoreOp, Surface, SurfaceConfiguration, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
-    VertexState,
+    SamplerDescriptor, ShaderStages, StencilState, StoreOp, Surface, SurfaceConfiguration,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor, VertexState,
 };
 use winit::window::Window;
 
@@ -152,9 +152,68 @@ impl Renderer {
                     },
                     count: None,
                 },
+                BindGroupLayoutEntry {
+                    binding: 2, // displacement texture
+                    visibility: ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 3, // displacement sampler
+                    visibility: ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
             ],
         });
-
+        let create_texels = |size| {
+            (0..size)
+                .map(|x| (((0.1 * x as f32).sin() + 1.0) * 128.0) as u8)
+                .collect::<Vec<u8>>()
+        };
+        let size = 256u32;
+        let texels = create_texels(size);
+        println!("{:?}", texels);
+        let texture_extent = Extent3d {
+            width: size,
+            height: 1,
+            depth_or_array_layers: 1,
+        };
+        let displacement_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: texture_extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::R8Unorm,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let displacement_texture_view =
+            displacement_texture.create_view(&TextureViewDescriptor::default());
+        queue.write_texture(
+            displacement_texture.as_image_copy(),
+            &texels,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(size),
+                rows_per_image: None,
+            },
+            texture_extent,
+        );
+        let displacement_sampler = device.create_sampler(&SamplerDescriptor {
+            address_mode_u: AddressMode::Repeat,
+            address_mode_v: AddressMode::Repeat,
+            address_mode_w: AddressMode::Repeat,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Nearest,
+            mipmap_filter: FilterMode::Nearest,
+            ..Default::default()
+        });
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
@@ -282,6 +341,14 @@ impl Renderer {
                         offset: 0,
                         size: BufferSize::new(node_uniform_size),
                     }),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&displacement_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&displacement_sampler),
                 },
             ],
             label: None,

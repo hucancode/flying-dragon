@@ -20,16 +20,21 @@ struct Light {
 var<uniform> world: mat4x4<f32>;
 @group(0) @binding(1)
 var<uniform> rotation: mat4x4<f32>;
+@group(0) @binding(2)
+var displacement_map: texture_2d<f32>;
+@group(0) @binding(3)
+var displacement_sampler: sampler;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
+
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
-    var dy = sin(input.position.x * 0.06) * 20.0;
-    var displacement = vec4(0.0, dy, 0.0, 0.0);
+    let displacement = textureSampleLevel(displacement_map, displacement_sampler, input.position.xy*0.004, 0.0);
+    let dy = displacement.r*20.0;
     result.color = input.color;
-    result.world_position = world * (input.position + displacement);
+    result.world_position = world * (input.position + vec4f(0.0, dy, 0.0, 0.0));
     result.position = view_proj * result.world_position;
     result.normal = rotation * input.normal;
     return result;

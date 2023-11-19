@@ -34,9 +34,10 @@ impl App {
             include_bytes!("assets/dragon.obj"),
             &self.renderer.device,
         ));
-        self.renderer
-            .root
-            .add_child(new_entity(dragon_mesh.clone(), shader.clone()));
+        let mut dragon = new_entity(dragon_mesh.clone(), shader.clone());
+        dragon.translate_x(50.0);
+        dragon.rotate_x(PI * 1.5);
+        self.renderer.root.add_child(dragon);
         let lights = vec![
             (
                 wgpu::Color {

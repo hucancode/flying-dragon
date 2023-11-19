@@ -35,7 +35,7 @@ impl App {
             &self.renderer.device,
         ));
         let mut dragon = new_entity(dragon_mesh.clone(), shader.clone());
-        dragon.translate_x(50.0);
+        dragon.translate_x(40.0);
         dragon.rotate_x(PI * 1.5);
         self.renderer.root.add_child(dragon);
         let lights = vec![

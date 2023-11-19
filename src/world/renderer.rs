@@ -177,7 +177,7 @@ impl Renderer {
         };
         let size = 256u32;
         let texels = create_texels(size);
-        println!("{:?}", texels);
+        // println!("{:?}", texels);
         let texture_extent = Extent3d {
             width: size,
             height: 1,
@@ -207,8 +207,8 @@ impl Renderer {
         );
         let displacement_sampler = device.create_sampler(&SamplerDescriptor {
             address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::Repeat,
-            address_mode_w: AddressMode::Repeat,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Nearest,
             mipmap_filter: FilterMode::Nearest,

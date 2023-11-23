@@ -8,7 +8,7 @@ use std::time::Instant;
 use winit::window::Window;
 
 const LIGHT_RADIUS: f32 = 50.0;
-const LIGHT_INTENSITY: f32 = 10.5;
+const LIGHT_INTENSITY: f32 = 10.0;
 
 pub struct App {
     renderer: Renderer,
@@ -27,7 +27,7 @@ impl App {
         let app_init_timestamp = Instant::now();
         let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &self.renderer.device));
         let shader = Rc::new(Shader::new(
-            &self.renderer.device,
+            &self.renderer,
             include_str!("material/shader-displaced.wgsl"),
         ));
         let dragon_mesh = Rc::new(Mesh::load_obj(
@@ -35,7 +35,6 @@ impl App {
             &self.renderer.device,
         ));
         let mut dragon = new_entity(dragon_mesh.clone(), shader.clone());
-        dragon.translate_x(-60.0);
         dragon.rotate_x(PI * 1.5);
         self.renderer.root.add_child(dragon);
         let lights = vec![
@@ -73,11 +72,15 @@ impl App {
                 4400,
             ),
         ];
+        let shader = Rc::new(Shader::new(
+            &self.renderer,
+            include_str!("material/shader.wgsl"),
+        ));
         self.lights = lights
             .into_iter()
             .map(|(color, radius, intensity, time_offset)| {
                 let mut cube = new_entity(cube_mesh.clone(), shader.clone());
-                cube.scale_uniform(0.7);
+                // cube.scale_uniform(0.7);
                 cube.translate(1.0, 1.0, 1.0);
                 let mut light = new_light(color, radius * intensity);
                 light.add_child(cube.clone());

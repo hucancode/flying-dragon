@@ -1,55 +1,36 @@
-use crate::geometry::Vertex;
-use crate::material::Shader;
 use crate::world::{node, Camera, Light, Node, NodeRef};
 use glam::{Mat4, Vec4};
 use std::cmp::max;
-use std::f32::consts::PI;
 use std::mem::size_of;
 use std::time::Instant;
-use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
+use wgpu::util::align_to;
 use wgpu::{
-    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
-    BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, Color, CommandEncoderDescriptor,
-    CompareFunction, DepthBiasState, DepthStencilState, Device, DeviceDescriptor, DynamicOffset,
-    Extent3d, Face, Features, FilterMode, FragmentState, FrontFace, IndexFormat, Instance, Limits,
-    LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode,
-    PrimitiveState, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
-    SamplerDescriptor, ShaderStages, StencilState, StoreOp, Surface, SurfaceConfiguration,
+    BufferAddress, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, DynamicOffset,
+    Extent3d, Features, IndexFormat, Instance, Limits, LoadOp, Operations, PowerPreference,
+    PresentMode, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
+    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor, VertexState,
+    TextureViewDescriptor,
 };
 use winit::window::Window;
 
-const MAX_ENTITY: u64 = 100000;
-const MAX_LIGHT: u64 = 10;
 const CLEAR_COLOR: Color = Color {
     r: 0.01233333333,
     g: 0.01233333333,
     b: 0.02388235294,
     a: 1.0,
 };
-const CAMERA_DISTANCE: f32 = 50.0;
+const CAMERA_DISTANCE: f32 = 60.0;
 
 pub struct Renderer {
     pub camera: Camera,
     pub root: NodeRef,
     pub time: f32,
-    config: SurfaceConfiguration,
-    surface: Surface,
+    pub config: SurfaceConfiguration,
+    pub surface: Surface,
     pub device: Device,
-    queue: Queue,
-    render_pipeline: RenderPipeline,
+    pub queue: Queue,
     depth_texture_view: TextureView,
-    bind_group_camera: BindGroup,
-    bind_group_node: BindGroup,
-    vp_buffer: Buffer,
-    w_buffer: Buffer,
-    r_buffer: Buffer,
-    displacement_offset_buffer: Buffer,
-    light_buffer: Buffer,
-    light_count_buffer: Buffer,
 }
 
 impl Renderer {
@@ -95,159 +76,6 @@ impl Renderer {
             view_formats: vec![],
         };
         surface.configure(&device, &config);
-        let new_shader_timestamp = Instant::now();
-        let bind_group_layout_camera =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0, // view projection
-                        visibility: ShaderStages::VERTEX,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1, // light
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(0),
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2, // light count
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(size_of::<usize>() as u64),
-                        },
-                        count: None,
-                    },
-                ],
-            });
-        let bind_group_layout_node = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0, // world
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1, // rotation
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 2, // displacement texture
-                    visibility: ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 3, // displacement sampler
-                    visibility: ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 4, // displacement offset
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: BufferSize::new(4 * size_of::<f32>() as u64),
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let create_texels = |size| {
-            let mut ret = Vec::new();
-            for i in 0..size {
-                let i = PI * 2.0 * i as f32 / size as f32;
-                ret.push(((i.sin() + 1.0) * 128.0) as u8);
-                ret.push(0);
-                ret.push(((i.cos() + 1.0) * 128.0) as u8);
-                ret.push(0);
-            }
-            ret
-        };
-        let size = 32u32;
-        let texels = create_texels(size);
-        // println!("{:?}", texels);
-        let texture_extent = Extent3d {
-            width: size,
-            height: 1,
-            depth_or_array_layers: 1,
-        };
-        let displacement_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: texture_extent,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        let displacement_texture_view =
-            displacement_texture.create_view(&TextureViewDescriptor::default());
-        queue.write_texture(
-            displacement_texture.as_image_copy(),
-            &texels,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(size * 4),
-                rows_per_image: None,
-            },
-            texture_extent,
-        );
-        let displacement_sampler = device.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::Repeat,
-            address_mode_w: AddressMode::Repeat,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
-            ..Default::default()
-        });
-        let displacement_offset_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Displacement Offset"),
-            size: 4 * size_of::<f32>() as u64,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
-            push_constant_ranges: &[],
-        });
-        let shader = Shader::new(&device, include_str!("../material/shader-displaced.wgsl"));
-        println!("created shader in {:?}", new_shader_timestamp.elapsed());
-        let new_pipeline_timestamp = Instant::now();
-
         let depth_texture = device.create_texture(&TextureDescriptor {
             size: Extent3d {
                 width: config.width,
@@ -263,125 +91,6 @@ impl Renderer {
             view_formats: &[],
         });
         let depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
-        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &shader.module,
-                entry_point: "vs_main",
-                buffers: &[Vertex::desc()],
-            },
-            fragment: Some(FragmentState {
-                module: &shader.module,
-                entry_point: "fs_main",
-                targets: &[Some(swapchain_format.into())],
-            }),
-            primitive: PrimitiveState {
-                front_face: FrontFace::Ccw,
-                cull_mode: Some(Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
-            multisample: MultisampleState::default(),
-            multiview: None,
-        });
-        let vp =
-            Camera::make_vp_matrix(config.width as f32 / config.height as f32, CAMERA_DISTANCE);
-        let vp_ref: &[f32; 16] = vp.as_ref();
-        let vp_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Camera View Projection Buffer"),
-            contents: bytemuck::cast_slice(vp_ref),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-        let light_uniform_size = size_of::<Light>() as BufferAddress;
-        let light_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Light Buffer"),
-            size: MAX_LIGHT as BufferAddress * light_uniform_size,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let light_count_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Light Count"),
-            size: size_of::<usize>() as u64,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let bind_group_camera = device.create_bind_group(&BindGroupDescriptor {
-            layout: &bind_group_layout_camera,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: vp_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: light_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: light_count_buffer.as_entire_binding(),
-                },
-            ],
-            label: None,
-        });
-        let node_uniform_size = size_of::<Mat4>() as BufferAddress;
-        let node_uniform_aligned = {
-            let alignment = device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
-            align_to(node_uniform_size, alignment)
-        };
-        let w_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Model world transform buffer"),
-            size: MAX_ENTITY as BufferAddress * node_uniform_aligned,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let r_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Model rotation buffer"),
-            size: MAX_ENTITY as BufferAddress * node_uniform_aligned,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let bind_group_node = device.create_bind_group(&BindGroupDescriptor {
-            layout: &bind_group_layout_node,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &w_buffer,
-                        offset: 0,
-                        size: BufferSize::new(node_uniform_size),
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &r_buffer,
-                        offset: 0,
-                        size: BufferSize::new(node_uniform_size),
-                    }),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::TextureView(&displacement_texture_view),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::Sampler(&displacement_sampler),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: displacement_offset_buffer.as_entire_binding(),
-                },
-            ],
-            label: None,
-        });
-        println!("created pipeline in {:?}", new_pipeline_timestamp.elapsed());
         println!(
             "in total, created new renderer in {:?}",
             new_renderer_timestamp.elapsed()
@@ -393,17 +102,8 @@ impl Renderer {
             surface,
             device,
             queue,
-            render_pipeline,
-            depth_texture_view,
-            bind_group_node,
-            bind_group_camera,
-            vp_buffer,
-            w_buffer,
-            r_buffer,
-            displacement_offset_buffer,
             time: 0.0,
-            light_buffer,
-            light_count_buffer,
+            depth_texture_view,
         }
     }
 
@@ -411,13 +111,6 @@ impl Renderer {
         self.config.width = max(1, width);
         self.config.height = max(1, height);
         self.surface.configure(&self.device, &self.config);
-        let mvp = Camera::make_vp_matrix(
-            self.config.width as f32 / self.config.height as f32,
-            CAMERA_DISTANCE,
-        );
-        let mvp_ref: &[f32; 16] = mvp.as_ref();
-        self.queue
-            .write_buffer(&self.vp_buffer, 0, bytemuck::cast_slice(mvp_ref));
         let depth_texture = self.device.create_texture(&TextureDescriptor {
             size: Extent3d {
                 width: self.config.width,
@@ -470,10 +163,12 @@ impl Renderer {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            rpass.set_pipeline(&self.render_pipeline);
-            rpass.set_bind_group(1, &self.bind_group_camera, &[]);
             let mut q = Vec::new();
             q.push((self.root.clone(), Mat4::IDENTITY));
+            let vp_matrix = Camera::make_vp_matrix(
+                self.config.width as f32 / self.config.height as f32,
+                CAMERA_DISTANCE,
+            );
             while let Some((node, transform_mx)) = q.pop() {
                 match &node.borrow().variant {
                     node::Variant::Entity(geometry, shader) => {
@@ -492,56 +187,42 @@ impl Renderer {
                     q.push((child.clone(), transform_mx));
                 }
             }
-            self.queue.write_buffer(
-                &self.light_count_buffer,
-                0,
-                bytemuck::bytes_of(&lights.len()),
-            );
-            let light_uniform_size = size_of::<Light>() as BufferAddress;
-            for (i, (color, radius, transform)) in lights.into_iter().enumerate() {
-                let offset = (light_uniform_size * i as u64) as BufferAddress;
-                let position = transform * Vec4::W;
-                let trunk = Light {
-                    position: [position.x, position.y, position.z],
-                    radius,
-                    color: [
-                        color.r as f32,
-                        color.g as f32,
-                        color.b as f32,
-                        color.a as f32,
-                    ],
-                };
-                self.queue
-                    .write_buffer(&self.light_buffer, offset, bytemuck::bytes_of(&trunk));
-            }
+            let lights = lights
+                .into_iter()
+                .map(|(color, radius, transform)| {
+                    let position = transform * Vec4::W;
+                    Light {
+                        position: [position.x, position.y, position.z],
+                        radius,
+                        color: [
+                            color.r as f32,
+                            color.g as f32,
+                            color.b as f32,
+                            color.a as f32,
+                        ],
+                    }
+                })
+                .collect::<Vec<Light>>();
             let node_uniform_aligned = {
                 let node_uniform_size = size_of::<Mat4>() as BufferAddress;
                 let alignment =
                     self.device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
                 align_to(node_uniform_size, alignment)
             };
-            self.queue.write_buffer(
-                &self.displacement_offset_buffer,
-                0,
-                bytemuck::bytes_of(&[self.time * 0.5, 0.0, 0.0, 0.0]),
-            );
-            for (i, (geometry, _shader, transform, rotation)) in nodes.iter().enumerate() {
+            for (i, (geometry, shader, transform, rotation)) in nodes.iter().enumerate() {
                 let offset = (node_uniform_aligned * i as u64) as BufferAddress;
-                self.queue.write_buffer(
-                    &self.w_buffer,
-                    offset,
-                    bytemuck::cast_slice(transform.as_ref()),
-                );
-                self.queue.write_buffer(
-                    &self.r_buffer,
-                    offset,
-                    bytemuck::cast_slice(rotation.as_ref()),
-                );
                 rpass.set_bind_group(
                     0,
-                    &self.bind_group_node,
+                    &shader.bind_group_node,
                     &[offset as DynamicOffset, offset as DynamicOffset],
                 );
+                rpass.set_bind_group(1, &shader.bind_group_camera, &[]);
+                rpass.set_pipeline(&shader.render_pipeline);
+                shader.write_camera_data(&self.queue, vp_matrix.as_ref());
+                shader.write_light_data(&self.queue, &lights);
+                shader.write_time_data(&self.queue, self.time);
+                shader.write_transform_data(&self.queue, offset, transform.as_ref());
+                shader.write_rotation_data(&self.queue, offset, rotation.as_ref());
                 rpass.set_index_buffer(geometry.index_buffer.slice(..), IndexFormat::Uint32);
                 rpass.set_vertex_buffer(0, geometry.vertex_buffer.slice(..));
                 let n = geometry.indices.len() as u32;

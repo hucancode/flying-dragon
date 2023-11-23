@@ -1,4 +1,5 @@
 const MAX_LIGHT = 10;
+const PI = 3.14159;
 struct VertexInput {
     @location(0) position: vec4<f32>,
     @location(1) normal: vec4<f32>,
@@ -25,20 +26,34 @@ var displacement_map: texture_2d<f32>;
 @group(0) @binding(3)
 var displacement_sampler: sampler;
 @group(0) @binding(4)
-var<uniform> displacement_offset: vec4<f32>;
+var<uniform> displacement_offset: f32;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
 
 @vertex
-fn vs_main(input: VertexInput) -> VertexOutput {
+fn vs_main_wip(input: VertexInput) -> VertexOutput {
+    let RADIUS = 620.0;
     var result: VertexOutput;
-    var uv = (input.position*0.003+displacement_offset).xy;
-    let displacement = textureSampleLevel(displacement_map, displacement_sampler, uv, 0.0);
-    let dx = displacement.x*120.0 - input.position.x;
-    let dy = displacement.y*120.0;
-    let dz = displacement.z*120.0;
+    var uv = (input.position*0.004).xy;
+    uv.x += displacement_offset;
+    var displacement = textureSampleLevel(displacement_map, displacement_sampler, uv, 0.0);
     result.color = input.color;
-    result.world_position = world * (input.position + vec4f(dx, dy, dz, 0.0));
+    result.world_position = world * (input.position + displacement * RADIUS);
+    result.position = view_proj * result.world_position;
+    result.normal = rotation * input.normal;
+    return result;
+}
+
+@vertex
+fn vs_main(input: VertexInput) -> VertexOutput {
+    let RADIUS = 60.0 - input.position.z;
+    var result: VertexOutput;
+    var polar_pos = input.position.x/RADIUS * PI * 0.5 + displacement_offset;
+    var x = cos(polar_pos) * RADIUS;
+    var dz = sin(polar_pos) * RADIUS;
+    var final_pos = vec4f(x, input.position.y, input.position.z + dz, input.position.w);
+    result.color = input.color;
+    result.world_position = world * final_pos;
     result.position = view_proj * result.world_position;
     result.normal = rotation * input.normal;
     return result;

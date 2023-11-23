@@ -1,5 +1,6 @@
 use crate::geometry::Mesh;
-use crate::material::Shader;
+use crate::material::ShaderDragon;
+use crate::material::ShaderLit;
 use crate::world::{new_entity, new_light, Node, NodeRef, Renderer};
 use glam::Vec4;
 use std::f32::consts::PI;
@@ -26,10 +27,7 @@ impl App {
     pub fn init(&mut self) {
         let app_init_timestamp = Instant::now();
         let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &self.renderer.device));
-        let shader = Rc::new(Shader::new(
-            &self.renderer,
-            include_str!("material/shader-displaced.wgsl"),
-        ));
+        let shader = Rc::new(ShaderDragon::new(&self.renderer));
         let dragon_mesh = Rc::new(Mesh::load_obj(
             include_bytes!("assets/dragon.obj"),
             &self.renderer.device,
@@ -72,10 +70,7 @@ impl App {
                 4400,
             ),
         ];
-        let shader = Rc::new(Shader::new(
-            &self.renderer,
-            include_str!("material/shader.wgsl"),
-        ));
+        let shader = Rc::new(ShaderLit::new(&self.renderer));
         self.lights = lights
             .into_iter()
             .map(|(color, radius, intensity, time_offset)| {

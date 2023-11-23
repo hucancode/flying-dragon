@@ -5,12 +5,11 @@ use std::mem::size_of;
 use std::time::Instant;
 use wgpu::util::align_to;
 use wgpu::{
-    BufferAddress, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, DynamicOffset,
-    Extent3d, Features, IndexFormat, Instance, Limits, LoadOp, Operations, PowerPreference,
-    PresentMode, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor,
+    BufferAddress, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, Features,
+    IndexFormat, Instance, Limits, LoadOp, Operations, PowerPreference, PresentMode, Queue,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -211,13 +210,7 @@ impl Renderer {
             };
             for (i, (geometry, shader, transform, rotation)) in nodes.iter().enumerate() {
                 let offset = (node_uniform_aligned * i as u64) as BufferAddress;
-                rpass.set_bind_group(
-                    0,
-                    &shader.bind_group_node,
-                    &[offset as DynamicOffset, offset as DynamicOffset],
-                );
-                rpass.set_bind_group(1, &shader.bind_group_camera, &[]);
-                rpass.set_pipeline(&shader.render_pipeline);
+                shader.set_pipeline(&mut rpass, offset);
                 shader.write_camera_data(&self.queue, vp_matrix.as_ref());
                 shader.write_light_data(&self.queue, &lights);
                 shader.write_time_data(&self.queue, self.time);

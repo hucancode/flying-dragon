@@ -9,17 +9,17 @@ use wgpu::{
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
     DepthStencilState, DynamicOffset, Extent3d, Face, FilterMode, FragmentState, FrontFace,
-    MultisampleState, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderModule, ShaderStages, StencilState,
-    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexState,
+    ImageDataLayout, MultisampleState, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass,
+    RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
+    ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
+    TextureViewDimension, VertexState,
 };
 
 use crate::geometry::Vertex;
 use crate::material::Shader;
-use crate::world::{Light, Renderer};
+use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
 
-const MAX_ENTITY: u64 = 100000;
-const MAX_LIGHT: u64 = 10;
 pub struct ShaderDragon {
     pub module: ShaderModule,
     pub render_pipeline: RenderPipeline,
@@ -98,17 +98,17 @@ impl ShaderDragon {
                 BindGroupLayoutEntry {
                     binding: 2, // displacement texture
                     visibility: ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Texture {
+                    ty: BindingType::Texture {
                         multisampled: false,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
                     },
                     count: None,
                 },
                 BindGroupLayoutEntry {
                     binding: 3, // displacement sampler
                     visibility: ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
                     count: None,
                 },
                 BindGroupLayoutEntry {
@@ -145,7 +145,7 @@ impl ShaderDragon {
             height: 1,
             depth_or_array_layers: 1,
         };
-        let displacement_texture = device.create_texture(&wgpu::TextureDescriptor {
+        let displacement_texture = device.create_texture(&TextureDescriptor {
             label: None,
             size: texture_extent,
             mip_level_count: 1,
@@ -160,7 +160,7 @@ impl ShaderDragon {
         renderer.queue.write_texture(
             displacement_texture.as_image_copy(),
             &texels,
-            wgpu::ImageDataLayout {
+            ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(size * 4),
                 rows_per_image: None,
@@ -187,9 +187,9 @@ impl ShaderDragon {
             bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
             push_constant_ranges: &[],
         });
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let module = device.create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_dragon.wgsl"))),
+            source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_dragon.wgsl"))),
         });
         let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: None,

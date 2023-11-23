@@ -10,13 +10,12 @@ use wgpu::{
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
     DepthStencilState, DynamicOffset, Face, FragmentState, FrontFace, MultisampleState,
     PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline,
-    RenderPipelineDescriptor, ShaderModule, ShaderStages, StencilState, TextureFormat, VertexState,
+    RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    StencilState, TextureFormat, VertexState,
 };
 
 use crate::geometry::Vertex;
-use crate::world::{Light, Renderer};
-
-const MAX_ENTITY: u64 = 100000;
+use crate::world::{Light, Renderer, MAX_ENTITY};
 
 pub struct ShaderUnlit {
     pub module: ShaderModule,
@@ -33,42 +32,38 @@ impl ShaderUnlit {
         let bind_group_layout_camera =
             device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: None,
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0, // view projection
-                        visibility: ShaderStages::VERTEX,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
-                        },
-                        count: None,
-                    },
-                ],
-            });
-        let bind_group_layout_node = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0, // world
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0, // view projection
                     visibility: ShaderStages::VERTEX,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
+                        has_dynamic_offset: false,
                         min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
                     },
                     count: None,
+                }],
+            });
+        let bind_group_layout_node = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0, // world
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: true,
+                    min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
                 },
-            ],
+                count: None,
+            }],
         });
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
             push_constant_ranges: &[],
         });
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let module = device.create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_unlit.wgsl"))),
+            source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_unlit.wgsl"))),
         });
         let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: None,
@@ -105,12 +100,10 @@ impl ShaderUnlit {
         });
         let bind_group_camera = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_camera,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: vp_buffer.as_entire_binding(),
-                },
-            ],
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: vp_buffer.as_entire_binding(),
+            }],
             label: None,
         });
         let node_uniform_size = size_of::<Mat4>() as BufferAddress;
@@ -126,16 +119,14 @@ impl ShaderUnlit {
         });
         let bind_group_node = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_node,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0, // world transform
-                    resource: BindingResource::Buffer(BufferBinding {
-                        buffer: &w_buffer,
-                        offset: 0,
-                        size: BufferSize::new(node_uniform_size),
-                    }),
-                },
-            ],
+            entries: &[BindGroupEntry {
+                binding: 0, // world transform
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &w_buffer,
+                    offset: 0,
+                    size: BufferSize::new(node_uniform_size),
+                }),
+            }],
             label: None,
         });
         println!("created shader in {:?}", new_shader_timestamp.elapsed());

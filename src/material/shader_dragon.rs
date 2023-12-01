@@ -8,9 +8,9 @@ use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
-    DepthStencilState, DynamicOffset, Extent3d, Face, FilterMode, FragmentState, FrontFace,
-    ImageDataLayout, MultisampleState, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass,
-    RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
+    DepthStencilState, DynamicOffset, Extent3d, Face, FragmentState, FrontFace, ImageDataLayout,
+    MultisampleState, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline,
+    RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
     ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState, TextureDescriptor,
     TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
     TextureViewDimension, VertexState,
@@ -155,8 +155,6 @@ impl ShaderDragon {
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        let displacement_texture_view =
-            displacement_texture.create_view(&TextureViewDescriptor::default());
         renderer.queue.write_texture(
             displacement_texture.as_image_copy(),
             &texels,
@@ -171,9 +169,6 @@ impl ShaderDragon {
             address_mode_u: AddressMode::Repeat,
             address_mode_v: AddressMode::Repeat,
             address_mode_w: AddressMode::Repeat,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
             ..Default::default()
         });
         let displacement_offset_buffer = device.create_buffer(&BufferDescriptor {
@@ -293,7 +288,9 @@ impl ShaderDragon {
                 },
                 BindGroupEntry {
                     binding: 2, // displacement texture
-                    resource: BindingResource::TextureView(&displacement_texture_view),
+                    resource: BindingResource::TextureView(
+                        &displacement_texture.create_view(&TextureViewDescriptor::default()),
+                    ),
                 },
                 BindGroupEntry {
                     binding: 3, // sampler

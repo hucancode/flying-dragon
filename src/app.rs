@@ -8,6 +8,7 @@ use std::f32::consts::PI;
 use std::rc::Rc;
 use std::time::Instant;
 use winit::window::Window;
+use splines::{Interpolation, Key, Spline};
 
 const LIGHT_RADIUS: f32 = 50.0;
 const LIGHT_INTENSITY: f32 = 10.0;
@@ -88,6 +89,35 @@ impl App {
                 (light, cube, time_offset)
             })
             .collect();
+        // infinity symbol oo
+        let points = vec![
+            (0.0,0.0,0.0),
+            (2.0,0.0,1.0),
+            (3.0,0.0,0.0),
+            (2.0,0.0,-1.0),
+            (0.0,0.0,0.0),
+            (-2.0,0.0,1.0),
+            (-3.0,0.0,0.0),
+            (-2.0,0.0,-1.0),
+            (0.0,0.0,0.0),
+        ];
+        let n = points.len();
+        let points = points.into_iter()
+            .map(|(x,y,z)| glam::Vec3::new(x,y,z)*20.0)
+            .enumerate()
+            .map(|(i,v)| Key::new(i as f32 / n as f32, v, Interpolation::CatmullRom))
+            .collect();
+        let spline = Spline::from_vec(points);
+        let n = 50;
+        for i in 0..n {
+            let t = i as f32/n as f32;
+            if let Some(pos) = spline.sample(t) {
+                let mut cube = new_entity(cube_mesh.clone(), shader_unlit.clone());
+                cube.translate(pos.x, pos.y, pos.z);
+                self.renderer.root.add_child(cube.clone());
+            }
+        }
+
         println!("app initialized in {:?}", app_init_timestamp.elapsed());
     }
     pub fn update(&mut self, delta_time: f32, time: u128) {

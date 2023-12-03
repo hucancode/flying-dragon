@@ -1,6 +1,10 @@
-use glam::Mat4;
+use crate::geometry::Vertex;
+use crate::material::Shader;
+use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
+use glam::{Mat4, Quat, Vec3};
+use splines::{Interpolation, Key, Spline};
 use std::borrow::Cow;
-use std::f32::consts::PI;
+use std::cmp::{max, min};
 use std::mem::size_of;
 use std::time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
@@ -15,10 +19,6 @@ use wgpu::{
     TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
     TextureViewDimension, VertexState,
 };
-
-use crate::geometry::Vertex;
-use crate::material::Shader;
-use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
 
 pub struct ShaderDragon {
     pub module: ShaderModule,
@@ -100,7 +100,7 @@ impl ShaderDragon {
                     visibility: ShaderStages::VERTEX,
                     ty: BindingType::Texture {
                         multisampled: false,
-                        sample_type: TextureSampleType::Float { filterable: true },
+                        sample_type: TextureSampleType::Float { filterable: false },
                         view_dimension: TextureViewDimension::D2,
                     },
                     count: None,
@@ -124,21 +124,45 @@ impl ShaderDragon {
             ],
         });
         let create_texels = |size| {
+            // infinity symbol oo, span from -3 -> 3
+            let points: Vec<Vec3> = vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(2.0, 0.0, 1.0),
+                Vec3::new(3.0, 0.0, 0.0),
+                Vec3::new(2.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(-2.0, 0.0, 1.0),
+                Vec3::new(-3.0, 0.0, 0.0),
+                Vec3::new(-2.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
+            ];
+            let n = points.len();
+            let points = points
+                .into_iter()
+                .map(|v| v)
+                .enumerate()
+                .map(|(i, v)| {
+                    let t = min(n - 2, max(1, i) - 1) as f32 / (n - 2) as f32;
+                    println!("key {t} -> {v:?}");
+                    Key::new(t, v, Interpolation::CatmullRom)
+                })
+                .collect();
+            let spline = Spline::from_vec(points);
             let mut ret = Vec::new();
-            const MAX_LEN: f32 = PI * 2.0;
-            let len_to_rad = |x| (x * MAX_LEN / size as f32);
-            let len_to_col = |x| (((x / MAX_LEN + 1.0) * 128.0) as u8);
             for i in 0..size {
-                let i = len_to_rad(i as f32);
-                ret.push(len_to_col(i.cos()));
-                ret.push(0);
-                ret.push(len_to_col(i.sin()));
-                ret.push(0);
+                let t = i as f32 / (size - 1) as f32;
+                let p = spline.clamped_sample(t).unwrap_or(Vec3::ZERO);
+                ret.push(p.x);
+                ret.push(p.y);
+                ret.push(p.z);
+                ret.push(0.0);
             }
-            ret
+            ret.into_iter().map(|v| (v / 3.0 * 128.0) as u8).collect()
         };
         let size = 128u32;
-        let texels = create_texels(size);
+        let texels: Vec<u8> = create_texels(size);
         // println!("{:?}", texels);
         let texture_extent = Extent3d {
             width: size,
@@ -151,13 +175,13 @@ impl ShaderDragon {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
+            format: TextureFormat::Rgba8Snorm,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
         renderer.queue.write_texture(
             displacement_texture.as_image_copy(),
-            &texels,
+            &bytemuck::cast_slice(texels.as_slice()),
             ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(size * 4),
@@ -167,8 +191,6 @@ impl ShaderDragon {
         );
         let displacement_sampler = device.create_sampler(&SamplerDescriptor {
             address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::Repeat,
-            address_mode_w: AddressMode::Repeat,
             ..Default::default()
         });
         let displacement_offset_buffer = device.create_buffer(&BufferDescriptor {

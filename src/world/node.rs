@@ -98,13 +98,13 @@ impl Node for NodeData {
         self.scale = Vec3::new(x, y, z);
     }
     fn scale_x(&mut self, x: f32) {
-        self.scale(x, 0.0, 0.0)
+        self.scale(x, 1.0, 1.0)
     }
     fn scale_y(&mut self, y: f32) {
-        self.scale(0.0, y, 0.0)
+        self.scale(1.0, y, 1.0)
     }
     fn scale_z(&mut self, z: f32) {
-        self.scale(0.0, 0.0, z)
+        self.scale(1.0, 1.0, z)
     }
     fn rotate_quat(&mut self, q: Quat) {
         self.rotation = q;
@@ -168,13 +168,13 @@ impl Node for NodeRef {
         self.borrow_mut().scale(x, y, z)
     }
     fn scale_x(&mut self, x: f32) {
-        self.scale(x, 0.0, 0.0)
+        self.scale(x, 1.0, 1.0)
     }
     fn scale_y(&mut self, y: f32) {
-        self.scale(0.0, y, 0.0)
+        self.scale(1.0, y, 1.0)
     }
     fn scale_z(&mut self, z: f32) {
-        self.scale(0.0, 0.0, z)
+        self.scale(1.0, 1.0, z)
     }
     fn rotate_quat(&mut self, q: Quat) {
         self.borrow_mut().rotate_quat(q);

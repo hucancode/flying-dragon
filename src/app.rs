@@ -3,12 +3,16 @@ use crate::material::ShaderDragon;
 use crate::material::ShaderLit;
 use crate::material::ShaderUnlit;
 use crate::world::{new_entity, new_light, Node, NodeRef, Renderer};
+use glam::Mat4;
+use glam::Quat;
+use glam::Vec3;
 use glam::Vec4;
+use splines::{Interpolation, Key, Spline};
+use std::cmp::{max, min};
 use std::f32::consts::PI;
 use std::rc::Rc;
 use std::time::Instant;
 use winit::window::Window;
-use splines::{Interpolation, Key, Spline};
 
 const LIGHT_RADIUS: f32 = 50.0;
 const LIGHT_INTENSITY: f32 = 10.0;
@@ -90,34 +94,46 @@ impl App {
             })
             .collect();
         // infinity symbol oo
-        let points = vec![
-            (0.0,0.0,0.0),
-            (2.0,0.0,1.0),
-            (3.0,0.0,0.0),
-            (2.0,0.0,-1.0),
-            (0.0,0.0,0.0),
-            (-2.0,0.0,1.0),
-            (-3.0,0.0,0.0),
-            (-2.0,0.0,-1.0),
-            (0.0,0.0,0.0),
+        let points: Vec<Vec3> = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 1.0),
+            Vec3::new(3.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(-2.0, 0.0, 1.0),
+            Vec3::new(-3.0, 0.0, 0.0),
+            Vec3::new(-2.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
         ];
         let n = points.len();
-        let points = points.into_iter()
-            .map(|(x,y,z)| glam::Vec3::new(x,y,z)*20.0)
+        let points = points
+            .into_iter()
+            .map(|v| v * 30.0)
             .enumerate()
-            .map(|(i,v)| Key::new(i as f32 / n as f32, v, Interpolation::CatmullRom))
+            .map(|(i, v)| {
+                Key::new(
+                    min(n - 2, max(1, i) - 1) as f32 / (n - 2) as f32,
+                    v,
+                    Interpolation::CatmullRom,
+                )
+            })
             .collect();
         let spline = Spline::from_vec(points);
-        let n = 50;
+        let n = 20;
         for i in 0..n {
-            let t = i as f32/n as f32;
-            if let Some(pos) = spline.sample(t) {
-                let mut cube = new_entity(cube_mesh.clone(), shader_unlit.clone());
-                cube.translate(pos.x, pos.y, pos.z);
-                self.renderer.root.add_child(cube.clone());
-            }
+            let t1 = i as f32 / (n - 1) as f32;
+            let t2 = ((i + 1) % n) as f32 / (n - 1) as f32;
+            let p1 = spline.clamped_sample(t1).unwrap_or(Vec3::ZERO);
+            let p2 = spline.clamped_sample(t2).unwrap_or(Vec3::X);
+            let rotation = Quat::from_rotation_arc(Vec3::X, (p2 - p1).normalize());
+            let mut cube = new_entity(cube_mesh.clone(), shader_unlit.clone());
+            cube.translate(p1.x, p1.y, p1.z);
+            cube.rotate_quat(rotation);
+            cube.scale_x(4.0);
+            self.renderer.root.add_child(cube.clone());
         }
-
         println!("app initialized in {:?}", app_init_timestamp.elapsed());
     }
     pub fn update(&mut self, delta_time: f32, time: u128) {

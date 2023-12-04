@@ -91,7 +91,7 @@ impl App {
                 (light, cube, time_offset)
             })
             .collect();
-        const DEBUG_SPLINE: bool = false;
+        const DEBUG_SPLINE: bool = true;
         if DEBUG_SPLINE {
             // infinity symbol oo
             let points: Vec<Vec3> = vec![
@@ -121,12 +121,12 @@ impl App {
                 })
                 .collect();
             let spline = Spline::from_vec(points);
-            let n = 20;
+            let n = 60;
             for i in 0..n {
                 let t1 = i as f32 / (n - 1) as f32;
                 let t2 = ((i + 1) % n) as f32 / (n - 1) as f32;
                 let p1 = spline.clamped_sample(t1).unwrap_or(Vec3::ZERO);
-                let p2 = spline.clamped_sample(t2).unwrap_or(Vec3::X);
+                let p2 = spline.clamped_sample(t2).unwrap_or(Vec3::ZERO);
                 let rotation = Quat::from_rotation_arc(Vec3::X, (p2 - p1).normalize());
                 let mut cube = new_entity(cube_mesh.clone(), shader_unlit.clone());
                 cube.translate(p1.x, p1.y, p1.z);

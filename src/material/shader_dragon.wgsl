@@ -43,7 +43,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     var p2 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u2,0.0), 0.0);
     // basis calculation are messed up now
     var tangent = normalize(p2 - p1);
-    var normal = normalize((p1 - p0) * (p2 - p0));
+    var prev_tangent = normalize(p1 - p0);
+    var normal = normalize(prev_tangent * tangent);
     if(length(normal) < 0.01 || true) { 
         normal = vec4(0.0,0.0,1.0,0.0);
     }

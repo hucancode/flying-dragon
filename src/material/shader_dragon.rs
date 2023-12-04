@@ -12,12 +12,12 @@ use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
-    DepthStencilState, DynamicOffset, Extent3d, Face, FragmentState, FrontFace, ImageDataLayout,
-    MultisampleState, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline,
-    RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
+    DepthStencilState, DynamicOffset, Extent3d, Face, FilterMode, FragmentState, FrontFace,
+    ImageDataLayout, MultisampleState, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass,
+    RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
     ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState, TextureDescriptor,
     TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension, VertexState, FilterMode,
+    TextureViewDimension, VertexState,
 };
 
 pub struct ShaderDragon {

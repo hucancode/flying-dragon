@@ -31,16 +31,31 @@ var<uniform> displacement_offset: f32;
 var<uniform> view_proj: mat4x4<f32>;
 
 @vertex
-fn vs_main_wip(input: VertexInput) -> VertexOutput {
-    let RADIUS = 620.0;
+fn vs_main(input: VertexInput) -> VertexOutput {
+    let LEN = 250.0;
     var result: VertexOutput;
-    var u = input.position.x*0.004 + displacement_offset;
-    var r0 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,0.0), 0.0);
-    var r1 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,1.0), 0.0);
-    var r2 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,2.0), 0.0);
-    var r3 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,3.0), 0.0);
-    let transform = mat4x4(r0,r1,r2,r3);
-    let position = transform * (input.position - vec4f(input.position.x, 0.0, 0.0, 0.0));
+    let dt = 0.002;
+    var u0 = (input.position.x + displacement_offset)/LEN - dt;
+    var u1 = (input.position.x + displacement_offset)/LEN;
+    var u2 = (input.position.x + displacement_offset)/LEN + dt;
+    var p0 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u0,0.0), 0.0);
+    var p1 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u1,0.0), 0.0);
+    var p2 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u2,0.0), 0.0);
+    // basis calculation are messed up now
+    var tangent = normalize(p2 - p1);
+    var normal = normalize((p1 - p0) * (p2 - p0));
+    if(length(normal) < 0.01 || true) { 
+        normal = vec4(0.0,0.0,1.0,0.0);
+    }
+    var binormal = normalize(tangent * normal);
+    if(length(binormal) < 0.01 || true) {
+        binormal = vec4(0.0,1.0,0.0,0.0);
+    }
+    var x = p1 * LEN;
+    var y = input.position.y * binormal;
+    var z = input.position.z * normal;
+    var position = x + y + z;
+    position.w = 1.0;
     result.color = input.color;
     result.world_position = world * position;
     result.position = view_proj * result.world_position;
@@ -49,7 +64,7 @@ fn vs_main_wip(input: VertexInput) -> VertexOutput {
 }
 
 @vertex
-fn vs_main(input: VertexInput) -> VertexOutput {
+fn vs_main_circle(input: VertexInput) -> VertexOutput {
     let RADIUS = 60.0 - input.position.z;
     var result: VertexOutput;
     var polar_pos = input.position.x/RADIUS * PI * 0.5 + displacement_offset;

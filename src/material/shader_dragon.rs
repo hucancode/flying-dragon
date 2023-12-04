@@ -1,7 +1,7 @@
 use crate::geometry::Vertex;
 use crate::material::Shader;
 use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Vec3};
 use splines::{Interpolation, Key, Spline};
 use std::borrow::Cow;
 use std::cmp::{max, min};
@@ -17,7 +17,7 @@ use wgpu::{
     RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
     ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState, TextureDescriptor,
     TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension, VertexState,
+    TextureViewDimension, VertexState, FilterMode,
 };
 
 pub struct ShaderDragon {
@@ -100,7 +100,7 @@ impl ShaderDragon {
                     visibility: ShaderStages::VERTEX,
                     ty: BindingType::Texture {
                         multisampled: false,
-                        sample_type: TextureSampleType::Float { filterable: false },
+                        sample_type: TextureSampleType::Float { filterable: true },
                         view_dimension: TextureViewDimension::D2,
                     },
                     count: None,
@@ -159,9 +159,11 @@ impl ShaderDragon {
                 ret.push(p.z);
                 ret.push(0.0);
             }
-            ret.into_iter().map(|v| (v / 3.0 * 128.0) as u8).collect()
+            ret.into_iter()
+                .map(|v| (v / 3.0 * 128.0 + 128.0) as u8)
+                .collect()
         };
-        let size = 128u32;
+        let size = 512u32;
         let texels: Vec<u8> = create_texels(size);
         // println!("{:?}", texels);
         let texture_extent = Extent3d {
@@ -175,13 +177,13 @@ impl ShaderDragon {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Snorm,
+            format: TextureFormat::Rgba8Unorm,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
         renderer.queue.write_texture(
             displacement_texture.as_image_copy(),
-            &bytemuck::cast_slice(texels.as_slice()),
+            &texels,
             ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(size * 4),
@@ -191,6 +193,7 @@ impl ShaderDragon {
         );
         let displacement_sampler = device.create_sampler(&SamplerDescriptor {
             address_mode_u: AddressMode::Repeat,
+            mag_filter: FilterMode::Linear,
             ..Default::default()
         });
         let displacement_offset_buffer = device.create_buffer(&BufferDescriptor {
@@ -357,7 +360,7 @@ impl Shader for ShaderDragon {
         queue.write_buffer(
             &self.displacement_offset_buffer,
             0,
-            bytemuck::bytes_of(&(time * 2.5)),
+            bytemuck::bytes_of(&(time * 50.5)),
         );
     }
     fn write_camera_data(&self, queue: &Queue, matrix: &[f32; 16]) {

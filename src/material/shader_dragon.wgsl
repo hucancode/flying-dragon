@@ -32,29 +32,18 @@ var<uniform> view_proj: mat4x4<f32>;
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
-    let LEN = 250.0;
+    let PATH_SCALE = 30.0;
+    let PATH_LEN = 200.0;
     var result: VertexOutput;
-    let dt = 0.002;
-    var u0 = (input.position.x + displacement_offset)/LEN - dt;
-    var u1 = (input.position.x + displacement_offset)/LEN;
-    var u2 = (input.position.x + displacement_offset)/LEN + dt;
-    var p0 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u0,0.0), 0.0);
-    var p1 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u1,0.0), 0.0);
-    var p2 = textureSampleLevel(displacement_map, displacement_sampler, vec2(u2,0.0), 0.0);
-    // basis calculation are messed up now
-    var tangent = normalize(p2 - p1);
-    var prev_tangent = normalize(p1 - p0);
-    var normal = normalize(prev_tangent * tangent);
-    if(length(normal) < 0.01 || true) { 
-        normal = vec4(0.0,0.0,1.0,0.0);
-    }
-    var binormal = normalize(tangent * normal);
-    if(length(binormal) < 0.01 || true) {
-        binormal = vec4(0.0,1.0,0.0,0.0);
-    }
-    var x = p1 * LEN;
-    var y = input.position.y * binormal;
-    var z = input.position.z * normal;
+    var u = (input.position.x + displacement_offset)/PATH_LEN;
+    var displacement = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,0.0), 0.0);
+    //var normal = vec4f(0.0,1.0,0.0,0.0);
+    var normal = normalize(textureSampleLevel(displacement_map, displacement_sampler, vec2(u,0.5), 0.0));
+    //var binormal = vec4f(0.0,0.0,1.0,0.0);
+    var binormal = normalize(textureSampleLevel(displacement_map, displacement_sampler, vec2(u,1.0), 0.0));
+    var x = displacement * PATH_SCALE;
+    var y = input.position.y * normal;
+    var z = input.position.z * binormal;
     var position = x + y + z;
     position.w = 1.0;
     result.color = input.color;

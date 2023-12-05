@@ -1,7 +1,7 @@
 use crate::geometry::Vertex;
 use crate::material::Shader;
 use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Quat};
 use splines::{Interpolation, Key, Spline};
 use std::borrow::Cow;
 use std::cmp::{max, min};
@@ -145,30 +145,46 @@ impl ShaderDragon {
                 .enumerate()
                 .map(|(i, v)| {
                     let t = min(n - 2, max(1, i) - 1) as f32 / (n - 2) as f32;
-                    println!("key {t} -> {v:?}");
                     Key::new(t, v, Interpolation::CatmullRom)
                 })
                 .collect();
             let spline = Spline::from_vec(points);
-            let mut ret = Vec::new();
+            let mut displacements = Vec::new();
+            let mut normals = Vec::new();
+            let mut binormals = Vec::new();
             for i in 0..size {
-                let t = i as f32 / (size - 1) as f32;
-                let p = spline.clamped_sample(t).unwrap_or(Vec3::ZERO);
-                ret.push(p.x);
-                ret.push(p.y);
-                ret.push(p.z);
-                ret.push(0.0);
+                let t1 = i as f32 / (size - 1) as f32;
+                let t2 = ((i + 1) % size) as f32 / (n - 1) as f32;
+                let p1 = spline.clamped_sample(t1).unwrap_or(Vec3::ZERO);
+                let p2 = spline.clamped_sample(t2).unwrap_or(Vec3::ZERO);
+                let rotation = Quat::from_rotation_arc(Vec3::X, (p2 - p1).normalize());
+                let normal = (rotation * Vec3::Y).normalize();
+                let binormal = (rotation * Vec3::Z).normalize();
+                displacements.push(p1.x);
+                displacements.push(p1.y);
+                displacements.push(p1.z);
+                displacements.push(0.0);
+                normals.push(normal.x);
+                normals.push(normal.y);
+                normals.push(normal.z);
+                normals.push(0.0);
+                binormals.push(binormal.x);
+                binormals.push(binormal.y);
+                binormals.push(binormal.z);
+                binormals.push(0.0);
             }
-            ret.into_iter()
-                .map(|v| (v / 3.0 * 128.0 + 128.0) as u8)
+            displacements.into_iter()
+                .chain(normals.into_iter())
+                .chain(binormals.into_iter())
+                .map(|v| (v / 3.0 * 128.0) as i8)
                 .collect()
         };
-        let size = 512u32;
-        let texels: Vec<u8> = create_texels(size);
+        let size = 32;
+        let texels: Vec<i8> = create_texels(size);
         // println!("{:?}", texels);
         let texture_extent = Extent3d {
             width: size,
-            height: 1,
+            height: 3,
             depth_or_array_layers: 1,
         };
         let displacement_texture = device.create_texture(&TextureDescriptor {
@@ -177,13 +193,13 @@ impl ShaderDragon {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
+            format: TextureFormat::Rgba8Snorm,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
         renderer.queue.write_texture(
             displacement_texture.as_image_copy(),
-            &texels,
+            bytemuck::cast_slice(&texels),
             ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(size * 4),

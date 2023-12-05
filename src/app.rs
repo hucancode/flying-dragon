@@ -35,9 +35,7 @@ impl App {
             include_bytes!("assets/dragon.obj"),
             &self.renderer.device,
         ));
-        let mut dragon = new_entity(dragon_mesh.clone(), shader.clone());
-        //dragon.rotate_x(PI * 1.5);
-        dragon.translate(-250.0, 0.0, -250.0);
+        let dragon = new_entity(dragon_mesh.clone(), shader.clone());
         self.renderer.root.add_child(dragon);
         let lights = vec![
             (
@@ -91,7 +89,7 @@ impl App {
                 (light, cube, time_offset)
             })
             .collect();
-        const DEBUG_SPLINE: bool = true;
+        const DEBUG_SPLINE: bool = false;
         if DEBUG_SPLINE {
             // infinity symbol oo
             let points: Vec<Vec3> = vec![
@@ -121,7 +119,7 @@ impl App {
                 })
                 .collect();
             let spline = Spline::from_vec(points);
-            let n = 60;
+            let n = 32;
             for i in 0..n {
                 let t1 = i as f32 / (n - 1) as f32;
                 let t2 = ((i + 1) % n) as f32 / (n - 1) as f32;

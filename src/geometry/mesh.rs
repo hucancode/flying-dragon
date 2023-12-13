@@ -46,7 +46,7 @@ impl Mesh {
                 // println!("pos: {:?}", mesh.positions.len());
                 // println!("index: {:?}", mesh.normal_indices.len());
                 // println!("index: {:?}", mesh.indices.len());
-                let offset = vertices.len();
+                let offset = vertices.len() as u32;
                 let n = mesh.positions.len();
                 for i in 0..n / 3 {
                     let i = i * 3;
@@ -64,7 +64,7 @@ impl Mesh {
                     vertices.push(Vertex::new(pos, nor, col));
                 }
                 for i in mesh.indices {
-                    indices.push(offset as u32 + i as u32);
+                    indices.push(offset + i);
                 }
             }
             Self::new(vertices, indices, device)

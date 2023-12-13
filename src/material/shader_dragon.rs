@@ -4,7 +4,6 @@ use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
 use glam::{Mat4, Quat, Vec3};
 use splines::{Interpolation, Key, Spline};
 use std::borrow::Cow;
-use std::cmp::{max, min};
 use std::mem::size_of;
 use std::time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
@@ -141,7 +140,6 @@ impl ShaderDragon {
             let n = points.len();
             let points = points
                 .into_iter()
-                .map(|v| v)
                 .enumerate()
                 .map(|(i, v)| {
                     let k = (i as f32 - 1.0) / (n - 3) as f32;
@@ -383,7 +381,7 @@ impl Shader for ShaderDragon {
     fn write_camera_data(&self, queue: &Queue, matrix: &[f32; 16]) {
         queue.write_buffer(&self.vp_buffer, 0, bytemuck::bytes_of(matrix));
     }
-    fn write_light_data(&self, queue: &Queue, lights: &Vec<Light>) {
+    fn write_light_data(&self, queue: &Queue, lights: &[Light]) {
         queue.write_buffer(
             &self.light_count_buffer,
             0,

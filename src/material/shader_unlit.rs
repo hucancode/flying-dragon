@@ -15,7 +15,7 @@ use wgpu::{
 };
 
 use crate::geometry::Vertex;
-use crate::world::{Light, Renderer, MAX_ENTITY};
+use crate::world::{Renderer, MAX_ENTITY};
 
 pub struct ShaderUnlit {
     pub module: ShaderModule,
@@ -150,16 +150,7 @@ impl Shader for ShaderUnlit {
     fn write_transform_data(&self, queue: &Queue, offset: BufferAddress, matrix: &[f32; 16]) {
         queue.write_buffer(&self.w_buffer, offset, bytemuck::bytes_of(matrix));
     }
-    fn write_rotation_data(&self, _queue: &Queue, _offset: BufferAddress, _matrix: &[f32; 16]) {
-        // do nothing
-    }
-    fn write_time_data(&self, _queue: &Queue, _time: f32) {
-        // do nothing
-    }
     fn write_camera_data(&self, queue: &Queue, matrix: &[f32; 16]) {
         queue.write_buffer(&self.vp_buffer, 0, bytemuck::bytes_of(matrix));
-    }
-    fn write_light_data(&self, _queue: &Queue, _lights: &Vec<Light>) {
-        // do nothing
     }
 }

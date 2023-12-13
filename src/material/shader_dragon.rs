@@ -1,7 +1,7 @@
 use crate::geometry::Vertex;
 use crate::material::Shader;
 use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
-use glam::{Mat4, Vec3, Quat};
+use glam::{Mat4, Quat, Vec3};
 use splines::{Interpolation, Key, Spline};
 use std::borrow::Cow;
 use std::cmp::{max, min};
@@ -126,7 +126,7 @@ impl ShaderDragon {
         let create_texels = |size| {
             // infinity symbol oo, span from -3 -> 3
             let points: Vec<Vec3> = vec![
-                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(-2.0, 0.0, -1.0),
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(2.0, 0.0, 1.0),
                 Vec3::new(3.0, 0.0, 0.0),
@@ -136,7 +136,7 @@ impl ShaderDragon {
                 Vec3::new(-3.0, 0.0, 0.0),
                 Vec3::new(-2.0, 0.0, -1.0),
                 Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(2.0, 0.0, 1.0),
             ];
             let n = points.len();
             let points = points
@@ -144,8 +144,8 @@ impl ShaderDragon {
                 .map(|v| v)
                 .enumerate()
                 .map(|(i, v)| {
-                    let t = min(n - 2, max(1, i) - 1) as f32 / (n - 2) as f32;
-                    Key::new(t, v, Interpolation::CatmullRom)
+                    let k = (i as f32 - 1.0) / (n - 3) as f32;
+                    Key::new(k, v, Interpolation::CatmullRom)
                 })
                 .collect();
             let spline = Spline::from_vec(points);
@@ -155,8 +155,8 @@ impl ShaderDragon {
             for i in 0..size {
                 let t1 = i as f32 / (size - 1) as f32;
                 let t2 = ((i + 1) % size) as f32 / (n - 1) as f32;
-                let p1 = spline.clamped_sample(t1).unwrap_or(Vec3::ZERO);
-                let p2 = spline.clamped_sample(t2).unwrap_or(Vec3::ZERO);
+                let p1 = spline.clamped_sample(t1).unwrap_or_default();
+                let p2 = spline.clamped_sample(t2).unwrap_or_default();
                 let rotation = Quat::from_rotation_arc(Vec3::X, (p2 - p1).normalize());
                 let normal = (rotation * Vec3::Y).normalize();
                 let binormal = (rotation * Vec3::Z).normalize();
@@ -173,10 +173,11 @@ impl ShaderDragon {
                 binormals.push(binormal.z);
                 binormals.push(0.0);
             }
-            displacements.into_iter()
-                .chain(normals.into_iter())
-                .chain(binormals.into_iter())
+            displacements
+                .into_iter()
                 .map(|v| (v / 3.0 * 128.0) as i8)
+                .chain(normals.into_iter().map(|v| (v * 128.0) as i8))
+                .chain(binormals.into_iter().map(|v| (v * 128.0) as i8))
                 .collect()
         };
         let size = 32;

@@ -5,7 +5,6 @@ use crate::material::ShaderUnlit;
 use crate::world::{new_entity, new_light, Node, NodeRef, Renderer};
 use glam::{Quat, Vec3, Vec4};
 use splines::{Interpolation, Key, Spline};
-use std::cmp::{max, min};
 use std::f32::consts::PI;
 use std::rc::Rc;
 use std::time::Instant;
@@ -79,10 +78,6 @@ impl App {
             .map(|(color, radius, intensity, time_offset)| {
                 let mut light = new_light(color, radius * intensity);
                 self.renderer.root.add_child(light.clone());
-                let mut cube = new_entity(cube_mesh.clone(), shader_unlit.clone());
-                cube.scale_uniform(0.7);
-                cube.translate(0.0, 3.0, 0.0);
-                light.add_child(cube.clone());
                 let mut cube = new_entity(cube_mesh.clone(), shader_lit.clone());
                 cube.translate(0.0, -2.0, 0.0);
                 light.add_child(cube.clone());
@@ -93,7 +88,7 @@ impl App {
         if DEBUG_SPLINE {
             // infinity symbol oo
             let points: Vec<Vec3> = vec![
-                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(-2.0, 0.0, -1.0),
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(2.0, 0.0, 1.0),
                 Vec3::new(3.0, 0.0, 0.0),
@@ -103,7 +98,7 @@ impl App {
                 Vec3::new(-3.0, 0.0, 0.0),
                 Vec3::new(-2.0, 0.0, -1.0),
                 Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(2.0, 0.0, 1.0),
             ];
             let n = points.len();
             let points = points
@@ -111,25 +106,27 @@ impl App {
                 .map(|v| v * 30.0)
                 .enumerate()
                 .map(|(i, v)| {
-                    Key::new(
-                        min(n - 2, max(1, i) - 1) as f32 / (n - 2) as f32,
-                        v,
-                        Interpolation::CatmullRom,
-                    )
+                    let k = (i as f32 - 1.0) / (n - 3) as f32;
+                    Key::new(k, v, Interpolation::CatmullRom)
                 })
                 .collect();
             let spline = Spline::from_vec(points);
-            let n = 32;
+            let n = 80;
             for i in 0..n {
                 let t1 = i as f32 / (n - 1) as f32;
                 let t2 = ((i + 1) % n) as f32 / (n - 1) as f32;
                 let p1 = spline.clamped_sample(t1).unwrap_or(Vec3::ZERO);
                 let p2 = spline.clamped_sample(t2).unwrap_or(Vec3::ZERO);
                 let rotation = Quat::from_rotation_arc(Vec3::X, (p2 - p1).normalize());
+                let r = ((t1 - 0.5).abs() * 512.0) as u32;
+                let g = 0x40;
+                let b = 0x00;
+                let col = 0xff + (b << 8) + (g << 16) + (r << 24);
+                let cube_mesh = Rc::new(Mesh::new_cube(col, &self.renderer.device));
                 let mut cube = new_entity(cube_mesh.clone(), shader_unlit.clone());
                 cube.translate(p1.x, p1.y, p1.z);
                 cube.rotate_quat(rotation);
-                cube.scale_x(4.0);
+                cube.scale_x(0.2);
                 self.renderer.root.add_child(cube.clone());
             }
         }

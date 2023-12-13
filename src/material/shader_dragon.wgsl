@@ -32,15 +32,15 @@ var<uniform> view_proj: mat4x4<f32>;
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
-    let PATH_SCALE = 30.0;
-    let PATH_LEN = 200.0;
+    let PATH_SCALE = 40.0;
+    let PATH_LEN = 300.0;
     var result: VertexOutput;
     var u = (input.position.x + displacement_offset)/PATH_LEN;
     var displacement = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,0.0), 0.0);
     //var normal = vec4f(0.0,1.0,0.0,0.0);
-    var normal = normalize(textureSampleLevel(displacement_map, displacement_sampler, vec2(u,0.5), 0.0));
+    var normal = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,0.5), 0.0);
     //var binormal = vec4f(0.0,0.0,1.0,0.0);
-    var binormal = normalize(textureSampleLevel(displacement_map, displacement_sampler, vec2(u,1.0), 0.0));
+    var binormal = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,1.0), 0.0);
     var x = displacement * PATH_SCALE;
     var y = input.position.y * normal;
     var z = input.position.z * binormal;

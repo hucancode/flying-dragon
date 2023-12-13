@@ -44,9 +44,9 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     var k = 0.0;
     for(var i = -BLUR_STEP;i<=BLUR_STEP;i++) {
         let offset = f32(i)/f32(BLUR_STEP)*BLUR_RADIUS;
-        let f = cos(f32(i)/f32(BLUR_STEP)*PI*0.5);
-        normal += f*textureSampleLevel(displacement_map, displacement_sampler, vec2(u+offset,0.5), 0.0);
-        binormal += f*textureSampleLevel(displacement_map, displacement_sampler, vec2(u+offset,1.0), 0.0);
+        let strength = cos(f32(i)/f32(BLUR_STEP)*PI*0.5);
+        normal += strength*textureSampleLevel(displacement_map, displacement_sampler, vec2(u+offset,0.5), 0.0);
+        binormal += strength*textureSampleLevel(displacement_map, displacement_sampler, vec2(u+offset,1.0), 0.0);
     }
     normal = normalize(normal);
     binormal = normalize(binormal);

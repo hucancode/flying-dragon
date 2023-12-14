@@ -176,37 +176,30 @@ impl ShaderDragon {
             }
             const BLUR_STEP: i32 = 60;
             let mut smooth_normals = vec![0.0; normals.len()];
+            let mut smooth_binormals = vec![0.0; binormals.len()];
             for i in 0..size {
-                let mut x = 0.0;
-                let mut y = 0.0;
-                let mut z = 0.0;
+                let mut nx = 0.0;
+                let mut ny = 0.0;
+                let mut nz = 0.0;
+                let mut bx = 0.0;
+                let mut by = 0.0;
+                let mut bz = 0.0;
                 for j in -BLUR_STEP..=BLUR_STEP {
                     let k = ((i + j + size) % size * 4) as usize;
                     let strength = f32::sin(3.14159 * i as f32 / BLUR_STEP as f32).abs();
-                    x += normals[k] * strength;
-                    y += normals[k + 1] * strength;
-                    z += normals[k + 2] * strength;
+                    nx += normals[k] * strength;
+                    ny += normals[k + 1] * strength;
+                    nz += normals[k + 2] * strength;
+                    bx += binormals[k] * strength;
+                    by += binormals[k + 1] * strength;
+                    bz += binormals[k + 2] * strength;
                 }
-                let v = Vec3::new(x, y, z).normalize_or_zero();
                 let i = (i * 4) as usize;
+                let v = Vec3::new(nx, ny, nz).normalize_or_zero();
                 smooth_normals[i] = v.x;
                 smooth_normals[i + 1] = v.y;
                 smooth_normals[i + 2] = v.z;
-            }
-            let mut smooth_binormals = vec![0.0; binormals.len()];
-            for i in 0..size {
-                let mut x = 0.0;
-                let mut y = 0.0;
-                let mut z = 0.0;
-                for j in -BLUR_STEP..=BLUR_STEP {
-                    let k = ((size + j + i) % size * 4) as usize;
-                    let strength = f32::sin(3.14159 * i as f32 / BLUR_STEP as f32).abs();
-                    x += binormals[k] * strength;
-                    y += binormals[k + 1] * strength;
-                    z += binormals[k + 2] * strength;
-                }
-                let v = Vec3::new(x, y, z).normalize_or_zero();
-                let i = (i * 4) as usize;
+                let v = Vec3::new(bx, by, bz).normalize_or_zero();
                 smooth_binormals[i] = v.x;
                 smooth_binormals[i + 1] = v.y;
                 smooth_binormals[i + 2] = v.z;

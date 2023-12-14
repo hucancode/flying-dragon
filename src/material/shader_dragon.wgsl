@@ -51,7 +51,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     binormal = normalize(binormal);
     var basis = mat4x4(tangent, normal, binormal, vec4f(0.0,0.0,0.0,1.0));
     var x = displacement1 * PATH_SCALE;
-    var yz = vec4f(0.0, input.position.yz, 1.0);
+    var yz = vec4f(0.0, input.position.y, input.position.z, 1.0);
     result.color = input.color;
     result.world_position = world * (x + basis * yz);
     result.position = view_proj * result.world_position;

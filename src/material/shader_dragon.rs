@@ -122,7 +122,7 @@ impl ShaderDragon {
                 },
             ],
         });
-        let create_texels = |size| {
+        let create_texels = |size: i32| {
             // infinity symbol oo, span from -3 -> 3
             let points: Vec<Vec3> = vec![
                 Vec3::new(-2.0, 0.0, -1.0),
@@ -151,13 +151,16 @@ impl ShaderDragon {
             let mut normals = Vec::new();
             let mut binormals = Vec::new();
             for i in 0..size {
+                let t0 = ((i + size - 1) % size) as f32 / (n - 1) as f32;
                 let t1 = i as f32 / (size - 1) as f32;
                 let t2 = ((i + 1) % size) as f32 / (n - 1) as f32;
+                let p0 = spline.clamped_sample(t0).unwrap_or_default();
                 let p1 = spline.clamped_sample(t1).unwrap_or_default();
                 let p2 = spline.clamped_sample(t2).unwrap_or_default();
-                let rotation = Quat::from_rotation_arc(Vec3::X, (p2 - p1).normalize());
-                let normal = (rotation * Vec3::Y).normalize();
-                let binormal = (rotation * Vec3::Z).normalize();
+                let tangent = p2 - p0;
+                let rotation = Quat::from_rotation_arc(Vec3::X, tangent.normalize_or_zero());
+                let normal = (rotation * Vec3::Y).normalize_or_zero();
+                let binormal = (rotation * Vec3::Z).normalize_or_zero();
                 displacements.push(p1.x);
                 displacements.push(p1.y);
                 displacements.push(p1.z);
@@ -171,15 +174,53 @@ impl ShaderDragon {
                 binormals.push(binormal.z);
                 binormals.push(0.0);
             }
+            const BLUR_STEP: i32 = 60;
+            let mut smooth_normals = vec![0.0; normals.len()];
+            for i in 0..size {
+                let mut x = 0.0;
+                let mut y = 0.0;
+                let mut z = 0.0;
+                for j in -BLUR_STEP..=BLUR_STEP {
+                    let k = ((i + j + size) % size * 4) as usize;
+                    let strength = f32::sin(3.14159 * i as f32 / BLUR_STEP as f32).abs();
+                    x += normals[k] * strength;
+                    y += normals[k + 1] * strength;
+                    z += normals[k + 2] * strength;
+                }
+                let v = Vec3::new(x, y, z).normalize_or_zero();
+                let i = (i * 4) as usize;
+                smooth_normals[i] = v.x;
+                smooth_normals[i + 1] = v.y;
+                smooth_normals[i + 2] = v.z;
+            }
+            let mut smooth_binormals = vec![0.0; binormals.len()];
+            for i in 0..size {
+                let mut x = 0.0;
+                let mut y = 0.0;
+                let mut z = 0.0;
+                for j in -BLUR_STEP..=BLUR_STEP {
+                    let k = ((size + j + i) % size * 4) as usize;
+                    let strength = f32::sin(3.14159 * i as f32 / BLUR_STEP as f32).abs();
+                    x += binormals[k] * strength;
+                    y += binormals[k + 1] * strength;
+                    z += binormals[k + 2] * strength;
+                }
+                let v = Vec3::new(x, y, z).normalize_or_zero();
+                let i = (i * 4) as usize;
+                smooth_binormals[i] = v.x;
+                smooth_binormals[i + 1] = v.y;
+                smooth_binormals[i + 2] = v.z;
+            }
             displacements
                 .into_iter()
-                .map(|v| (v / 3.0 * 128.0) as i8)
-                .chain(normals.into_iter().map(|v| (v * 128.0) as i8))
-                .chain(binormals.into_iter().map(|v| (v * 128.0) as i8))
+                .map(|v| v / 3.0)
+                .chain(smooth_normals.into_iter())
+                .chain(smooth_binormals.into_iter())
+                .map(|v| (v * 128.0) as i8)
                 .collect()
         };
-        let size = 256;
-        let texels: Vec<i8> = create_texels(size);
+        let size = 512;
+        let texels: Vec<i8> = create_texels(size as i32);
         // println!("{:?}", texels);
         let texture_extent = Extent3d {
             width: size,
@@ -232,6 +273,7 @@ impl ShaderDragon {
             vertex: VertexState {
                 module: &module,
                 entry_point: "vs_main",
+                // entry_point: "vs_main_circle",
                 buffers: &[Vertex::desc()],
             },
             fragment: Some(FragmentState {

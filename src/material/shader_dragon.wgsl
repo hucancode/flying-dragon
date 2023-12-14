@@ -2,8 +2,6 @@ const MAX_LIGHT = 10;
 const PI = 3.14159;
 const PATH_SCALE = 40.0;
 const PATH_LEN = 300.0;
-const BLUR_STEP = 15;
-const BLUR_RADIUS = 0.5;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -46,14 +44,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     var displacement1 = sample(vec2(u,0.0));
     var displacement2 = sample(vec2(u+0.01,0.0));
     var tangent = displacement2 - displacement1;
-    var normal = vec4f(0.0);
-    var binormal = vec4f(0.0);
-    for(var i = -BLUR_STEP;i<=BLUR_STEP;i++) {
-        let offset = f32(i)/f32(BLUR_STEP)*BLUR_RADIUS;
-        let strength = cos(f32(i)/f32(BLUR_STEP)*PI*0.5);
-        normal += strength*sample(vec2(u+offset,0.5));
-        binormal += strength*sample(vec2(u+offset,1.0));
-    }
+    var normal = sample(vec2(u,0.5));
+    var binormal = sample(vec2(u,1.0));
     tangent = normalize(tangent);
     normal = normalize(normal);
     binormal = normalize(binormal);
@@ -70,11 +62,12 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 @vertex
 fn vs_main_circle(input: VertexInput) -> VertexOutput {
     let RADIUS = 60.0 - input.position.z;
+    let SPEED = 0.02;
     var result: VertexOutput;
-    var polar_pos = input.position.x/RADIUS * PI * 0.5 + displacement_offset;
+    var polar_pos = input.position.x/RADIUS * PI * 0.5 + SPEED*displacement_offset;
     var x = cos(polar_pos) * RADIUS;
-    var dz = sin(polar_pos) * RADIUS;
-    var final_pos = vec4f(x, input.position.y, input.position.z + dz, input.position.w);
+    var dy = sin(polar_pos) * RADIUS;
+    var final_pos = vec4f(x, input.position.y + dy, input.position.z, input.position.w);
     result.color = input.color;
     result.world_position = world * final_pos;
     result.position = view_proj * result.world_position;

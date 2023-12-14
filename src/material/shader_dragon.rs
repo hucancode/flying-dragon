@@ -219,7 +219,7 @@ impl ShaderDragon {
                 .map(|v| (v * 128.0) as i8)
                 .collect()
         };
-        let size = 512;
+        let size = 256;
         let texels: Vec<i8> = create_texels(size as i32);
         // println!("{:?}", texels);
         let texture_extent = Extent3d {

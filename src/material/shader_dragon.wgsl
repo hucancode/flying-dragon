@@ -1,5 +1,10 @@
 const MAX_LIGHT = 10;
 const PI = 3.14159;
+const PATH_SCALE = 40.0;
+const PATH_LEN = 300.0;
+const BLUR_STEP = 15;
+const BLUR_RADIUS = 0.5;
+
 struct VertexInput {
     @location(0) position: vec4<f32>,
     @location(1) normal: vec4<f32>,
@@ -30,37 +35,35 @@ var<uniform> displacement_offset: f32;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
 
+fn sample(uv: vec2f) -> vec4f {
+    return textureSampleLevel(displacement_map, displacement_sampler, uv, 0.0);
+}
+
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
-    let PATH_SCALE = 40.0;
-    let PATH_LEN = 300.0;
-    let BLUR_STEP = 15;
-    let BLUR_RADIUS = 0.5;
     var result: VertexOutput;
     var u = (input.position.x + displacement_offset)/PATH_LEN;
-    var displacement = textureSampleLevel(displacement_map, displacement_sampler, vec2(u,0.0), 0.0);
+    var displacement1 = sample(vec2(u,0.0));
+    var displacement2 = sample(vec2(u+0.01,0.0));
+    var tangent = displacement2 - displacement1;
     var normal = vec4f(0.0);
     var binormal = vec4f(0.0);
-    var k = 0.0;
     for(var i = -BLUR_STEP;i<=BLUR_STEP;i++) {
         let offset = f32(i)/f32(BLUR_STEP)*BLUR_RADIUS;
         let strength = cos(f32(i)/f32(BLUR_STEP)*PI*0.5);
-        normal += strength*textureSampleLevel(displacement_map, displacement_sampler, vec2(u+offset,0.5), 0.0);
-        binormal += strength*textureSampleLevel(displacement_map, displacement_sampler, vec2(u+offset,1.0), 0.0);
+        normal += strength*sample(vec2(u+offset,0.5));
+        binormal += strength*sample(vec2(u+offset,1.0));
     }
+    tangent = normalize(tangent);
     normal = normalize(normal);
     binormal = normalize(binormal);
-    //var normal = vec4f(0.0,1.0,0.0,0.0);
-    //var binormal = vec4f(0.0,0.0,1.0,0.0);
-    var x = displacement * PATH_SCALE;
-    var y = input.position.y * normal;
-    var z = input.position.z * binormal;
-    var position = x + y + z;
-    position.w = 1.0;
+    var basis = mat4x4(tangent, normal, binormal, vec4f(0.0,0.0,0.0,1.0));
+    var x = displacement1 * PATH_SCALE;
+    var yz = vec4f(0.0, input.position.yz, 1.0);
     result.color = input.color;
-    result.world_position = world * position;
+    result.world_position = world * (x + basis * yz);
     result.position = view_proj * result.world_position;
-    result.normal = rotation * input.normal;
+    result.normal = rotation * normalize(basis * input.normal);
     return result;
 }
 

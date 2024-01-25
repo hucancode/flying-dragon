@@ -2,6 +2,7 @@ use crate::world::{node, Camera, Light, Node, NodeRef};
 use glam::{Mat4, Vec4};
 use std::cmp::max;
 use std::mem::size_of;
+use std::sync::Arc;
 use std::time::Instant;
 use wgpu::util::align_to;
 use wgpu::{
@@ -28,18 +29,18 @@ pub struct Renderer {
     pub root: NodeRef,
     pub time: f32,
     pub config: SurfaceConfiguration,
-    pub surface: Surface,
+    pub surface: Surface<'static>,
     pub device: Device,
     pub queue: Queue,
     depth_texture_view: TextureView,
 }
 
 impl Renderer {
-    pub async fn new(window: &Window) -> Renderer {
+    pub async fn new(window: Arc<Window>) -> Renderer {
         let new_renderer_timestamp = Instant::now();
         let size = window.inner_size();
         let instance = Instance::default();
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let surface = instance.create_surface(window).unwrap();
         println!("created surface in {:?}", new_renderer_timestamp.elapsed());
         let device_request_timestamp = Instant::now();
         let adapter = instance
@@ -54,8 +55,8 @@ impl Renderer {
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    features: Features::empty(),
-                    limits: Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits()),
+                    required_features: Features::empty(),
+                    required_limits: Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits()),
                 },
                 None,
             )
@@ -72,6 +73,7 @@ impl Renderer {
             format: swapchain_format,
             width: size.width,
             height: size.height,
+            desired_maximum_frame_latency: 2,
             present_mode: PresentMode::Fifo,
             alpha_mode: swapchain_capabilities.alpha_modes[0],
             view_formats: vec![],

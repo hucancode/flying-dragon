@@ -7,6 +7,7 @@ use glam::{Quat, Vec3, Vec4};
 use splines::{Interpolation, Key, Spline};
 use std::f32::consts::PI;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Instant;
 use winit::window::Window;
 
@@ -19,7 +20,7 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(window: &Window) -> Self {
+    pub async fn new(window: Arc<Window>) -> Self {
         let renderer = Renderer::new(window).await;
         Self {
             renderer,

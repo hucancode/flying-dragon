@@ -33,9 +33,7 @@ pub async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                     app.resize(size.width, size.height);
                     window.request_redraw();
                 }
-                WindowEvent::RedrawRequested => {
-                    app.draw();
-                }
+                WindowEvent::RedrawRequested => app.draw(),
                 WindowEvent::CloseRequested => elwt.exit(),
                 _ => {}
             },

@@ -56,7 +56,8 @@ impl Renderer {
                 &DeviceDescriptor {
                     label: None,
                     required_features: Features::empty(),
-                    required_limits: Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits()),
+                    required_limits: Limits::downlevel_webgl2_defaults()
+                        .using_resolution(adapter.limits()),
                 },
                 None,
             )

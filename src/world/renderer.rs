@@ -6,11 +6,11 @@ use std::sync::Arc;
 use std::time::Instant;
 use wgpu::util::align_to;
 use wgpu::{
-    BufferAddress, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, Features,
-    IndexFormat, Instance, Limits, LoadOp, Operations, PowerPreference, Queue,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    BufferAddress, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d,
+    IndexFormat, Instance, LoadOp, Operations, Queue, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp,
+    Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -45,22 +45,13 @@ impl Renderer {
         let device_request_timestamp = Instant::now();
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
-                power_preference: PowerPreference::default(),
-                force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
+                ..Default::default()
             })
             .await
             .expect("Failed to find an appropriate adapter");
         let (device, queue) = adapter
-            .request_device(
-                &DeviceDescriptor {
-                    label: None,
-                    required_features: Features::empty(),
-                    required_limits: Limits::downlevel_webgl2_defaults()
-                        .using_resolution(adapter.limits()),
-                },
-                None,
-            )
+            .request_device(&DeviceDescriptor::default(), None)
             .await
             .expect("Failed to create device");
         println!(
@@ -134,90 +125,87 @@ impl Renderer {
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
         let mut nodes = Vec::new();
         let mut lights: Vec<(Color, f32, Mat4)> = Vec::new();
-        {
-            nodes.clear();
-            lights.clear();
-            let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(CLEAR_COLOR),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture_view,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Discard,
-                    }),
-                    stencil_ops: None,
+        nodes.clear();
+        lights.clear();
+        let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(CLEAR_COLOR),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &self.depth_texture_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Discard,
                 }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            let mut q = Vec::new();
-            q.push((self.root.clone(), Mat4::IDENTITY));
-            let vp_matrix = Camera::make_vp_matrix(
-                self.config.width as f32 / self.config.height as f32,
-                CAMERA_DISTANCE,
-            );
-            while let Some((node, transform_mx)) = q.pop() {
-                match &node.borrow().variant {
-                    node::Variant::Entity(geometry, shader) => {
-                        let (_scale, rotation, _translation) =
-                            transform_mx.to_scale_rotation_translation();
-                        let rotation = Mat4::from_quat(rotation);
-                        nodes.push((geometry.clone(), shader.clone(), transform_mx, rotation));
-                    }
-                    node::Variant::Light(color, radius) => {
-                        lights.push((*color, *radius, transform_mx));
-                    }
-                    _ => {}
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        let mut q = Vec::new();
+        q.push((self.root.clone(), Mat4::IDENTITY));
+        let vp_matrix = Camera::make_vp_matrix(
+            self.config.width as f32 / self.config.height as f32,
+            CAMERA_DISTANCE,
+        );
+        while let Some((node, transform_mx)) = q.pop() {
+            match &node.borrow().variant {
+                node::Variant::Entity(geometry, shader) => {
+                    let (_scale, rotation, _translation) =
+                        transform_mx.to_scale_rotation_translation();
+                    let rotation = Mat4::from_quat(rotation);
+                    nodes.push((geometry.clone(), shader.clone(), transform_mx, rotation));
                 }
-                for child in node.borrow().children.iter() {
-                    let transform_mx = transform_mx * child.calculate_transform();
-                    q.push((child.clone(), transform_mx));
+                node::Variant::Light(color, radius) => {
+                    lights.push((*color, *radius, transform_mx));
                 }
+                _ => {}
             }
-            let lights = lights
-                .into_iter()
-                .map(|(color, radius, transform)| {
-                    let position = transform * Vec4::W;
-                    Light {
-                        position: [position.x, position.y, position.z],
-                        radius,
-                        color: [
-                            color.r as f32,
-                            color.g as f32,
-                            color.b as f32,
-                            color.a as f32,
-                        ],
-                    }
-                })
-                .collect::<Vec<Light>>();
-            let node_uniform_aligned = {
-                let node_uniform_size = size_of::<Mat4>() as BufferAddress;
-                let alignment =
-                    self.device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
-                align_to(node_uniform_size, alignment)
-            };
-            for (i, (geometry, shader, transform, rotation)) in nodes.iter().enumerate() {
-                let offset = (node_uniform_aligned * i as u64) as BufferAddress;
-                shader.set_pipeline(&mut rpass, offset);
-                shader.write_camera_data(&self.queue, vp_matrix.as_ref());
-                shader.write_light_data(&self.queue, &lights);
-                shader.write_time_data(&self.queue, self.time);
-                shader.write_transform_data(&self.queue, offset, transform.as_ref());
-                shader.write_rotation_data(&self.queue, offset, rotation.as_ref());
-                rpass.set_index_buffer(geometry.index_buffer.slice(..), IndexFormat::Uint32);
-                rpass.set_vertex_buffer(0, geometry.vertex_buffer.slice(..));
-                let n = geometry.indices.len() as u32;
-                rpass.draw_indexed(0..n, 0, 0..1);
+            for child in node.borrow().children.iter() {
+                let transform_mx = transform_mx * child.calculate_transform();
+                q.push((child.clone(), transform_mx));
             }
         }
+        let lights: Vec<Light> = lights
+            .into_iter()
+            .map(|(color, radius, transform)| {
+                let position = transform * Vec4::W;
+                Light {
+                    position: [position.x, position.y, position.z],
+                    radius,
+                    color: [
+                        color.r as f32,
+                        color.g as f32,
+                        color.b as f32,
+                        color.a as f32,
+                    ],
+                }
+            })
+            .collect();
+        let node_uniform_aligned = {
+            let node_uniform_size = size_of::<Mat4>() as BufferAddress;
+            let alignment =
+                self.device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
+            align_to(node_uniform_size, alignment)
+        };
+        for (i, (geometry, shader, transform, rotation)) in nodes.iter().enumerate() {
+            let offset = (node_uniform_aligned * i as u64) as BufferAddress;
+            shader.set_pipeline(&mut rpass, offset);
+            shader.write_camera_data(&self.queue, vp_matrix.as_ref());
+            shader.write_light_data(&self.queue, &lights);
+            shader.write_time_data(&self.queue, self.time);
+            shader.write_transform_data(&self.queue, offset, transform.as_ref());
+            shader.write_rotation_data(&self.queue, offset, rotation.as_ref());
+            rpass.set_index_buffer(geometry.index_buffer.slice(..), IndexFormat::Uint32);
+            rpass.set_vertex_buffer(0, geometry.vertex_buffer.slice(..));
+            let n = geometry.indices.len() as u32;
+            rpass.draw_indexed(0..n, 0, 0..1);
+        }
+        drop(rpass);
         self.queue.submit(Some(encoder.finish()));
         frame.present();
     }

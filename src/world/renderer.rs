@@ -7,7 +7,7 @@ use std::time::Instant;
 use wgpu::util::align_to;
 use wgpu::{
     BufferAddress, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, Features,
-    IndexFormat, Instance, Limits, LoadOp, Operations, PowerPreference, PresentMode, Queue,
+    IndexFormat, Instance, Limits, LoadOp, Operations, PowerPreference, Queue,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureDescriptor,
     TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
@@ -67,18 +67,9 @@ impl Renderer {
             "requested device in {:?}",
             device_request_timestamp.elapsed()
         );
-        let swapchain_capabilities = surface.get_capabilities(&adapter);
-        let swapchain_format = swapchain_capabilities.formats[0];
-        let config = SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            format: swapchain_format,
-            width: size.width,
-            height: size.height,
-            desired_maximum_frame_latency: 2,
-            present_mode: PresentMode::Fifo,
-            alpha_mode: swapchain_capabilities.alpha_modes[0],
-            view_formats: vec![],
-        };
+        let config = surface
+            .get_default_config(&adapter, size.width, size.height)
+            .unwrap();
         surface.configure(&device, &config);
         let depth_texture = device.create_texture(&TextureDescriptor {
             size: Extent3d {

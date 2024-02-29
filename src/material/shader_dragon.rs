@@ -8,15 +8,13 @@ use std::mem::size_of;
 use std::time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
-    DepthStencilState, DynamicOffset, Extent3d, Face, FilterMode, FragmentState, FrontFace,
-    ImageDataLayout, MultisampleState, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass,
-    RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
-    ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension, VertexState,
+    DepthStencilState, DynamicOffset, Face, FragmentState, FrontFace, MultisampleState,
+    PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline,
+    RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    StencilState, TextureFormat, VertexState,
 };
 
 pub struct ShaderDragon {
@@ -95,19 +93,13 @@ impl ShaderDragon {
                     count: None,
                 },
                 BindGroupLayoutEntry {
-                    binding: 2, // displacement texture
+                    binding: 2, // displacement map
                     visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Texture {
-                        multisampled: false,
-                        sample_type: TextureSampleType::Float { filterable: true },
-                        view_dimension: TextureViewDimension::D2,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 3, // displacement sampler
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
                     count: None,
                 },
                 BindGroupLayoutEntry {
@@ -122,7 +114,8 @@ impl ShaderDragon {
                 },
             ],
         });
-        let create_texels = |size: i32| {
+        let create_displacement = |size: i32| {
+            const PATH_LENGTH: f32 = 15.0;
             // infinity symbol oo, span from -3 -> 3
             let points: Vec<Vec3> = vec![
                 Vec3::new(-2.0, 0.0, -1.0),
@@ -147,103 +140,44 @@ impl ShaderDragon {
                 })
                 .collect();
             let spline = Spline::from_vec(points);
-            let mut displacements = Vec::new();
-            let mut normals = Vec::new();
-            let mut binormals = Vec::new();
-            for i in 0..size {
-                let t0 = ((i + size - 1) % size) as f32 / (n - 1) as f32;
-                let t1 = i as f32 / (size - 1) as f32;
-                let t2 = ((i + 1) % size) as f32 / (n - 1) as f32;
-                let p0 = spline.clamped_sample(t0).unwrap_or_default();
-                let p1 = spline.clamped_sample(t1).unwrap_or_default();
-                let p2 = spline.clamped_sample(t2).unwrap_or_default();
-                let tangent = p2 - p0;
-                let rotation = Quat::from_rotation_arc(Vec3::X, tangent.normalize_or_zero());
-                let normal = (rotation * Vec3::Y).normalize_or_zero();
-                let binormal = (rotation * Vec3::Z).normalize_or_zero();
-                displacements.push(p1.x);
-                displacements.push(p1.y);
-                displacements.push(p1.z);
-                displacements.push(0.0);
-                normals.push(normal.x);
-                normals.push(normal.y);
-                normals.push(normal.z);
-                normals.push(0.0);
-                binormals.push(binormal.x);
-                binormals.push(binormal.y);
-                binormals.push(binormal.z);
-                binormals.push(0.0);
-            }
-            const BLUR_STEP: i32 = 60;
-            let mut smooth_normals = vec![0.0; normals.len()];
-            let mut smooth_binormals = vec![0.0; binormals.len()];
-            for i in 0..size {
-                let mut nx = 0.0;
-                let mut ny = 0.0;
-                let mut nz = 0.0;
-                let mut bx = 0.0;
-                let mut by = 0.0;
-                let mut bz = 0.0;
-                for j in -BLUR_STEP..=BLUR_STEP {
-                    let k = ((i + j + size) % size * 4) as usize;
-                    let strength = f32::sin(3.14159 * i as f32 / BLUR_STEP as f32).abs();
-                    nx += normals[k] * strength;
-                    ny += normals[k + 1] * strength;
-                    nz += normals[k + 2] * strength;
-                    bx += binormals[k] * strength;
-                    by += binormals[k + 1] * strength;
-                    bz += binormals[k + 2] * strength;
+            let mut ret = Vec::new();
+            let mut last_tangent = Vec3::X;
+            const SMOOTH: i32 = 20;
+            for j in 0..size {
+                let mut tangent = Vec3::ZERO;
+                let mut weight = 0.0;
+                for delta in -SMOOTH..=SMOOTH {
+                    let i = (j + size + delta) % size;
+                    let t1 = i as f32 / (size - 1) as f32;
+                    let t2 = ((i + 1) % size) as f32 / (n - 1) as f32;
+                    let p1 = spline.clamped_sample(t1).unwrap_or_default() * PATH_LENGTH;
+                    let p2 = spline.clamped_sample(t2).unwrap_or_default() * PATH_LENGTH;
+                    let w = (SMOOTH + 1 - delta) as f32;
+                    weight += w;
+                    tangent += (p2 - p1) * w;
                 }
-                let i = (i * 4) as usize;
-                let v = Vec3::new(nx, ny, nz).normalize_or_zero();
-                smooth_normals[i] = v.x;
-                smooth_normals[i + 1] = v.y;
-                smooth_normals[i + 2] = v.z;
-                let v = Vec3::new(bx, by, bz).normalize_or_zero();
-                smooth_binormals[i] = v.x;
-                smooth_binormals[i + 1] = v.y;
-                smooth_binormals[i + 2] = v.z;
+                tangent /= weight;
+                let t = j as f32 / (size - 1) as f32;
+                let p = spline.clamped_sample(t).unwrap_or_default() * PATH_LENGTH;
+                let transform = Mat4::from_rotation_translation(
+                    Quat::from_rotation_arc(
+                        Vec3::X,
+                        tangent.try_normalize().unwrap_or(last_tangent),
+                    ),
+                    p,
+                );
+                last_tangent = tangent;
+                ret.push(transform);
             }
-            displacements
-                .into_iter()
-                .map(|v| v / 3.0)
-                .chain(smooth_normals.into_iter())
-                .chain(smooth_binormals.into_iter())
-                .map(|v| (v * 128.0) as i8)
-                .collect()
+            ret
         };
-        let size = 256;
-        let texels: Vec<i8> = create_texels(size as i32);
+        let size = 1024;
+        let displacement_data: Vec<Mat4> = create_displacement(size);
         // println!("{:?}", texels);
-        let texture_extent = Extent3d {
-            width: size,
-            height: 3,
-            depth_or_array_layers: 1,
-        };
-        let displacement_texture = device.create_texture(&TextureDescriptor {
+        let displacement_map_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            contents: bytemuck::cast_slice(displacement_data.as_slice()),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             label: None,
-            size: texture_extent,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Snorm,
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        renderer.queue.write_texture(
-            displacement_texture.as_image_copy(),
-            bytemuck::cast_slice(&texels),
-            ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(size * 4),
-                rows_per_image: None,
-            },
-            texture_extent,
-        );
-        let displacement_sampler = device.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::Repeat,
-            mag_filter: FilterMode::Linear,
-            ..Default::default()
         });
         let displacement_offset_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("Displacement Offset"),
@@ -363,13 +297,7 @@ impl ShaderDragon {
                 },
                 BindGroupEntry {
                     binding: 2, // displacement texture
-                    resource: BindingResource::TextureView(
-                        &displacement_texture.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 3, // sampler
-                    resource: BindingResource::Sampler(&displacement_sampler),
+                    resource: displacement_map_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 4, // offset

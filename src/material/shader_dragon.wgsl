@@ -1,7 +1,6 @@
 const MAX_LIGHT = 10;
 const PI = 3.14159;
-const PATH_SCALE = 40.0;
-const PATH_LEN = 300.0;
+const PATH_LEN = 200.0;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -25,37 +24,28 @@ var<uniform> world: mat4x4<f32>;
 @group(0) @binding(1)
 var<uniform> rotation: mat4x4<f32>;
 @group(0) @binding(2)
-var displacement_map: texture_2d<f32>;
-@group(0) @binding(3)
-var displacement_sampler: sampler;
+var<storage> displacement_map: array<mat4x4<f32>>;
 @group(0) @binding(4)
 var<uniform> displacement_offset: f32;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
 
-fn sample(uv: vec2f) -> vec4f {
-    return textureSampleLevel(displacement_map, displacement_sampler, uv, 0.0);
-}
-
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
-    var u = (input.position.x + displacement_offset)/PATH_LEN;
-    var displacement1 = sample(vec2(u,0.0));
-    var displacement2 = sample(vec2(u+0.01,0.0));
-    var tangent = displacement2 - displacement1;
-    var normal = sample(vec2(u,0.5));
-    var binormal = sample(vec2(u,1.0));
-    tangent = normalize(tangent);
-    normal = normalize(normal);
-    binormal = normalize(binormal);
-    var basis = mat4x4(tangent, normal, binormal, vec4f(0.0,0.0,0.0,1.0));
-    var x = displacement1 * PATH_SCALE;
-    var yz = vec4f(0.0, input.position.y, input.position.z, 1.0);
-    result.color = input.color;
-    result.world_position = world * (x + basis * yz);
+    let n = 1024u;
+    //let n = arrayLength(displacement_map);
+    let u = (input.position.x + displacement_offset)*f32(n)/PATH_LEN;
+    let u_low = (u32(floor(u))%n+n)%n;
+    let u_high = u32(ceil(u))%n;
+    let k = fract(u);
+    let spline_low = displacement_map[u_low];
+    let spline_high = displacement_map[u_high];
+    let pos = vec4f(0.0, input.position.y, input.position.z, input.position.w);
+    result.world_position = world * mix(spline_low * pos, spline_high * pos, k);
     result.position = view_proj * result.world_position;
-    result.normal = rotation * normalize(basis * input.normal);
+    result.normal = rotation * input.normal;
+    result.color = input.color;
     return result;
 }
 

@@ -19,7 +19,7 @@ use wgpu::{
 
 const CURVE_RESOLUTION: i32 = 128;
 const CURVE_SCALE: f32 = 15.0;
-const CURVE_SMOOTH: i32 = 10;
+const CURVE_SMOOTH: i32 = 0;
 
 pub struct ShaderDragon {
     pub module: ShaderModule,
@@ -108,12 +108,13 @@ impl ShaderDragon {
             ],
         });
         let create_displacement = |points: Vec<Vec3>| {
-            let n = points.len();
+            let n = points.len() - 3;
+            let i0 = 1;
             let points = points
                 .into_iter()
                 .enumerate()
                 .map(|(i, v)| {
-                    let k = (i as f32 - 1.0) / (n - 3) as f32;
+                    let k = (i as f32 - i0 as f32) / n as f32;
                     Key::new(k, v, Interpolation::CatmullRom)
                 })
                 .collect();
@@ -125,8 +126,8 @@ impl ShaderDragon {
                 let mut weight_sum = 0.0;
                 for delta in -CURVE_SMOOTH..=CURVE_SMOOTH {
                     let i = (j + CURVE_RESOLUTION + delta) % CURVE_RESOLUTION;
-                    let t1 = i as f32 / (CURVE_RESOLUTION - 1) as f32;
-                    let t2 = ((i + 1) % CURVE_RESOLUTION) as f32 / (n - 1) as f32;
+                    let t1 = i as f32 / CURVE_RESOLUTION as f32;
+                    let t2 = ((i + 1) % CURVE_RESOLUTION) as f32 / CURVE_RESOLUTION as f32;
                     let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
                     let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
                     let weight = (CURVE_SMOOTH + 1 - delta) as f32;
@@ -134,6 +135,15 @@ impl ShaderDragon {
                     tangent += (p2 - p1) * weight;
                 }
                 tangent /= weight_sum;
+                let alpha = tangent.clone().angle_between(last_tangent.clone());
+                if j > 0 && alpha > 0.5 || alpha.is_nan() {
+                    let t1 = j as f32 / (CURVE_RESOLUTION - 1) as f32;
+                    let t2 = ((j + 1) % CURVE_RESOLUTION) as f32 / (n - 1) as f32;
+                    let p1 = spline.clamped_sample(t1).unwrap_or_default();
+                    let p2 = spline.clamped_sample(t2).unwrap_or_default();
+                    println!("at {j}, t1 = {t1}, t2 = {t2}, abnormal alpha = {alpha}");
+                    println!("p1 = {p1:?}, p2 = {p2:?}");
+                }
                 let t = j as f32 / (CURVE_RESOLUTION - 1) as f32;
                 let p = spline.clamped_sample(t).unwrap_or_default() * CURVE_SCALE;
                 let transform = Mat4::from_rotation_translation(
@@ -150,8 +160,8 @@ impl ShaderDragon {
         };
         // infinity symbol oo, span from -3 -> 3
         let points: Vec<Vec3> = vec![
-            Vec3::new(-2.0, 0.0, -1.0),
-            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(-2.0, 0.0, -1.0), // cushion
+            Vec3::new(0.0, 0.0, 0.0),   // start
             Vec3::new(2.0, 0.0, 1.0),
             Vec3::new(3.0, 0.0, 0.0),
             Vec3::new(2.0, 0.0, -1.0),
@@ -159,8 +169,8 @@ impl ShaderDragon {
             Vec3::new(-2.0, 0.0, 1.0),
             Vec3::new(-3.0, 0.0, 0.0),
             Vec3::new(-2.0, 0.0, -1.0),
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(2.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.0, 0.0), // end
+            Vec3::new(2.0, 0.0, 1.0), // cushion
         ];
         let displacement_data: Vec<Mat4> = create_displacement(points);
         // println!("{:?}", texels);

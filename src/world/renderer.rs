@@ -177,7 +177,8 @@ impl Renderer {
                 position.w = radius;
                 Light {
                     position_and_radius: position,
-                    color: Vec4::new(color.r as f32,
+                    color: Vec4::new(
+                        color.r as f32,
                         color.g as f32,
                         color.b as f32,
                         color.a as f32,

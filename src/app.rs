@@ -35,6 +35,7 @@ impl App {
             include_bytes!("assets/dragon.obj"),
             &self.renderer.device,
         ));
+        println!("loaded mesh in {:?}", app_init_timestamp.elapsed());
         let dragon = new_entity(dragon_mesh.clone(), shader.clone());
         self.renderer.root.add_child(dragon);
         let lights = vec![

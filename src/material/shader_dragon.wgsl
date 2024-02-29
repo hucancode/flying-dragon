@@ -34,9 +34,9 @@ var<uniform> view_proj: mat4x4<f32>;
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
     let n = arrayLength(&displacement_map);
-    let u = (input.position.x + time*SPEED)*f32(n)/PATH_LEN;
-    let u_low = (u32(floor(u))%n+n)%n;
-    let u_high = (u32(ceil(u))%n+n)%n;
+    let u = (input.position.x + time*SPEED)/PATH_LEN*f32(n) + f32(n);
+    let u_low = u32(floor(u))%n;
+    let u_high = u32(ceil(u))%n;
     let k = fract(u);
     let spline_low = displacement_map[u_low];
     let spline_high = displacement_map[u_high];

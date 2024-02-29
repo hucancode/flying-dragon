@@ -108,14 +108,17 @@ impl ShaderDragon {
             ],
         });
         let create_displacement = |points: Vec<Vec3>| {
-            let n = points.len() - 3;
+            let n = points.len();
+            let left_pad = points.iter().skip(n-1);
+            let right_pad = points.iter().take(2);
             let i0 = 1;
-            let points = points
-                .into_iter()
+            let points = left_pad
+                .chain(points.iter())
+                .chain(right_pad)
                 .enumerate()
                 .map(|(i, v)| {
                     let k = (i as f32 - i0 as f32) / n as f32;
-                    Key::new(k, v, Interpolation::CatmullRom)
+                    Key::new(k, *v, Interpolation::CatmullRom)
                 })
                 .collect();
             let spline = Spline::from_vec(points);
@@ -160,8 +163,7 @@ impl ShaderDragon {
         };
         // infinity symbol oo, span from -3 -> 3
         let points: Vec<Vec3> = vec![
-            Vec3::new(-2.0, 0.0, -1.0), // cushion
-            Vec3::new(0.0, 0.0, 0.0),   // start
+            Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(2.0, 0.0, 1.0),
             Vec3::new(3.0, 0.0, 0.0),
             Vec3::new(2.0, 0.0, -1.0),
@@ -169,8 +171,6 @@ impl ShaderDragon {
             Vec3::new(-2.0, 0.0, 1.0),
             Vec3::new(-3.0, 0.0, 0.0),
             Vec3::new(-2.0, 0.0, -1.0),
-            Vec3::new(0.0, 0.0, 0.0), // end
-            Vec3::new(2.0, 0.0, 1.0), // cushion
         ];
         let displacement_data: Vec<Mat4> = create_displacement(points);
         // println!("{:?}", texels);

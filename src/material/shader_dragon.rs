@@ -162,7 +162,18 @@ impl ShaderDragon {
             ret
         };
         // infinity symbol oo, span from -3 -> 3
-        let points: Vec<Vec3> = vec![
+        let points_1: Vec<Vec3> = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 2.0, 0.0),
+            Vec3::new(3.0, 0.0, 0.0),
+            Vec3::new(2.0, -1.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(-2.0, 1.0, 0.0),
+            Vec3::new(-3.0, 0.0, 0.0),
+            Vec3::new(-2.0, -1.0, 0.0),
+        ];
+        // infinity symbol oo, span from -3 -> 3
+        let _points_2: Vec<Vec3> = vec![
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(2.0, 0.0, 1.0),
             Vec3::new(3.0, 0.0, 0.0),
@@ -172,7 +183,18 @@ impl ShaderDragon {
             Vec3::new(-3.0, 0.0, 0.0),
             Vec3::new(-2.0, 0.0, -1.0),
         ];
-        let displacement_data: Vec<Mat4> = create_displacement(points);
+        // infinity symbol oo, span from -3 -> 3
+        let _points_3: Vec<Vec3> = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 2.0, 1.0),
+            Vec3::new(3.0, 0.0, 0.0),
+            Vec3::new(2.0, -1.0, 1.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(-2.0, 1.0, 1.0),
+            Vec3::new(-3.0, 0.0, 0.0),
+            Vec3::new(-2.0, -1.0, 1.0),
+        ];
+        let displacement_data: Vec<Mat4> = create_displacement(points_1);
         // println!("{:?}", texels);
         let displacement_map_buffer = device.create_buffer_init(&BufferInitDescriptor {
             contents: bytemuck::cast_slice(displacement_data.as_slice()),

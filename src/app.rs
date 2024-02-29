@@ -133,9 +133,9 @@ impl App {
         }
         println!("app initialized in {:?}", app_init_timestamp.elapsed());
     }
-    pub fn update(&mut self, delta_time: f32, time: u128) {
+    pub fn update(&mut self, _delta_time: f32, time: f32) {
         for (light, cube, time_offset) in self.lights.iter_mut() {
-            let time = time + *time_offset;
+            let time = time + *time_offset as f32;
             let rx = PI * 2.0 * (0.00042 * time as f64).sin() as f32;
             let ry = PI * 2.0 * (0.00011 * time as f64).sin() as f32;
             let rz = PI * 2.0 * (0.00027 * time as f64).sin() as f32;
@@ -146,7 +146,7 @@ impl App {
             let v = Vec4::new(x, y, z, 1.0).normalize() * LIGHT_RADIUS;
             light.translate(v.x, v.y, v.z);
         }
-        self.renderer.time += delta_time;
+        self.renderer.time = time;
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {

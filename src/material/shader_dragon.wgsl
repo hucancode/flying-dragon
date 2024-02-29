@@ -1,6 +1,7 @@
 const MAX_LIGHT = 10;
 const PI = 3.14159;
 const PATH_LEN = 200.0;
+const SPEED = 0.05;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -25,8 +26,8 @@ var<uniform> world: mat4x4<f32>;
 var<uniform> rotation: mat4x4<f32>;
 @group(0) @binding(2)
 var<storage> displacement_map: array<mat4x4<f32>>;
-@group(0) @binding(4)
-var<uniform> displacement_offset: f32;
+@group(0) @binding(3)
+var<uniform> time: f32;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
 
@@ -35,7 +36,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
     let n = 1024u;
     //let n = arrayLength(displacement_map);
-    let u = (input.position.x + displacement_offset)*f32(n)/PATH_LEN;
+    let u = (input.position.x + time*SPEED)*f32(n)/PATH_LEN;
     let u_low = (u32(floor(u))%n+n)%n;
     let u_high = u32(ceil(u))%n;
     let k = fract(u);
@@ -52,9 +53,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 @vertex
 fn vs_main_circle(input: VertexInput) -> VertexOutput {
     let RADIUS = 60.0 - input.position.z;
-    let SPEED = 0.02;
     var result: VertexOutput;
-    var polar_pos = input.position.x/RADIUS * PI * 0.5 + SPEED*displacement_offset;
+    var polar_pos = input.position.x/RADIUS * PI * 0.5 + time*SPEED;
     var x = cos(polar_pos) * RADIUS;
     var dy = sin(polar_pos) * RADIUS;
     var final_pos = vec4f(x, input.position.y + dy, input.position.z, input.position.w);

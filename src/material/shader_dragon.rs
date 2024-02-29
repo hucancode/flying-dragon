@@ -103,7 +103,7 @@ impl ShaderDragon {
                     count: None,
                 },
                 BindGroupLayoutEntry {
-                    binding: 4, // displacement offset
+                    binding: 3, // displacement offset
                     visibility: ShaderStages::VERTEX,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
@@ -300,7 +300,7 @@ impl ShaderDragon {
                     resource: displacement_map_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
-                    binding: 4, // offset
+                    binding: 3, // offset
                     resource: displacement_offset_buffer.as_entire_binding(),
                 },
             ],
@@ -338,7 +338,7 @@ impl Shader for ShaderDragon {
         queue.write_buffer(
             &self.displacement_offset_buffer,
             0,
-            bytemuck::bytes_of(&(time * 50.5)),
+            bytemuck::bytes_of(&(time)),
         );
     }
     fn write_camera_data(&self, queue: &Queue, matrix: &[f32; 16]) {

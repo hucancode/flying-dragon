@@ -88,7 +88,7 @@ impl Renderer {
             surface,
             device,
             queue,
-            time: 0.0,
+            time: 1000.0,
             depth_texture_view,
         }
     }

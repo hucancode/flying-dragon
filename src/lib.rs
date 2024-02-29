@@ -21,7 +21,7 @@ pub async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                 StartCause::Init => app.init(),
                 StartCause::Poll => {
                     let delta_time = 0.001 * last_update_timestamp.elapsed().as_millis() as f32;
-                    let time = app_start_timestamp.elapsed().as_millis();
+                    let time = app_start_timestamp.elapsed().as_millis() as f32;
                     app.update(delta_time, time);
                     last_update_timestamp = Instant::now();
                     window.request_redraw();

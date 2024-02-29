@@ -3,6 +3,6 @@ This is my attempt in learning WebGPU, specifically `wgpu` by creating a 3D anim
 
 # Latest result
 
-https://github.com/hucancode/flying-dragon/assets/15852849/e3368082-c465-480a-b765-48c401b5c78f
+https://github.com/hucancode/flying-dragon/assets/15852849/234b9080-e80f-4e66-9764-34420297b5fa
 
 

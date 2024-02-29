@@ -52,7 +52,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 fn vs_main_circle(input: VertexInput) -> VertexOutput {
     let RADIUS = 60.0 - input.position.z;
     var result: VertexOutput;
-    var polar_pos = input.position.x/RADIUS * PI * 0.5 + time*SPEED;
+    var polar_pos = input.position.x/RADIUS*PI*0.5 + time*SPEED/PI/2;
     var x = cos(polar_pos) * RADIUS;
     var dy = sin(polar_pos) * RADIUS;
     var final_pos = vec4f(x, input.position.y + dy, input.position.z, input.position.w);

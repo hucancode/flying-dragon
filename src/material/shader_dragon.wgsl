@@ -34,8 +34,7 @@ var<uniform> view_proj: mat4x4<f32>;
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
-    let n = 1024u;
-    //let n = arrayLength(displacement_map);
+    let n = arrayLength(&displacement_map);
     let u = (input.position.x + time*SPEED)*f32(n)/PATH_LEN;
     let u_low = (u32(floor(u))%n+n)%n;
     let u_high = u32(ceil(u))%n;

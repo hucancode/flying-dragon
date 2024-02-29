@@ -17,6 +17,10 @@ use wgpu::{
     StencilState, TextureFormat, VertexState,
 };
 
+const CURVE_RESOLUTION: i32 = 128;
+const CURVE_SCALE: f32 = 15.0;
+const CURVE_SMOOTH: i32 = 10;
+
 pub struct ShaderDragon {
     pub module: ShaderModule,
     pub render_pipeline: RenderPipeline,
@@ -114,22 +118,7 @@ impl ShaderDragon {
                 },
             ],
         });
-        let create_displacement = |size: i32| {
-            const PATH_LENGTH: f32 = 15.0;
-            // infinity symbol oo, span from -3 -> 3
-            let points: Vec<Vec3> = vec![
-                Vec3::new(-2.0, 0.0, -1.0),
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(2.0, 0.0, 1.0),
-                Vec3::new(3.0, 0.0, 0.0),
-                Vec3::new(2.0, 0.0, -1.0),
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(-2.0, 0.0, 1.0),
-                Vec3::new(-3.0, 0.0, 0.0),
-                Vec3::new(-2.0, 0.0, -1.0),
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(2.0, 0.0, 1.0),
-            ];
+        let create_displacement = |points: Vec<Vec3>| {
             let n = points.len();
             let points = points
                 .into_iter()
@@ -142,23 +131,22 @@ impl ShaderDragon {
             let spline = Spline::from_vec(points);
             let mut ret = Vec::new();
             let mut last_tangent = Vec3::X;
-            const SMOOTH: i32 = 20;
-            for j in 0..size {
+            for j in 0..CURVE_RESOLUTION {
                 let mut tangent = Vec3::ZERO;
-                let mut weight = 0.0;
-                for delta in -SMOOTH..=SMOOTH {
-                    let i = (j + size + delta) % size;
-                    let t1 = i as f32 / (size - 1) as f32;
-                    let t2 = ((i + 1) % size) as f32 / (n - 1) as f32;
-                    let p1 = spline.clamped_sample(t1).unwrap_or_default() * PATH_LENGTH;
-                    let p2 = spline.clamped_sample(t2).unwrap_or_default() * PATH_LENGTH;
-                    let w = (SMOOTH + 1 - delta) as f32;
-                    weight += w;
-                    tangent += (p2 - p1) * w;
+                let mut weight_sum = 0.0;
+                for delta in -CURVE_SMOOTH..=CURVE_SMOOTH {
+                    let i = (j + CURVE_RESOLUTION + delta) % CURVE_RESOLUTION;
+                    let t1 = i as f32 / (CURVE_RESOLUTION - 1) as f32;
+                    let t2 = ((i + 1) % CURVE_RESOLUTION) as f32 / (n - 1) as f32;
+                    let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
+                    let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
+                    let weight = (CURVE_SMOOTH + 1 - delta) as f32;
+                    weight_sum += weight;
+                    tangent += (p2 - p1) * weight;
                 }
-                tangent /= weight;
-                let t = j as f32 / (size - 1) as f32;
-                let p = spline.clamped_sample(t).unwrap_or_default() * PATH_LENGTH;
+                tangent /= weight_sum;
+                let t = j as f32 / (CURVE_RESOLUTION - 1) as f32;
+                let p = spline.clamped_sample(t).unwrap_or_default() * CURVE_SCALE;
                 let transform = Mat4::from_rotation_translation(
                     Quat::from_rotation_arc(
                         Vec3::X,
@@ -171,8 +159,21 @@ impl ShaderDragon {
             }
             ret
         };
-        let size = 1024;
-        let displacement_data: Vec<Mat4> = create_displacement(size);
+        // infinity symbol oo, span from -3 -> 3
+        let points: Vec<Vec3> = vec![
+            Vec3::new(-2.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 1.0),
+            Vec3::new(3.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(-2.0, 0.0, 1.0),
+            Vec3::new(-3.0, 0.0, 0.0),
+            Vec3::new(-2.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 1.0),
+        ];
+        let displacement_data: Vec<Mat4> = create_displacement(points);
         // println!("{:?}", texels);
         let displacement_map_buffer = device.create_buffer_init(&BufferInitDescriptor {
             contents: bytemuck::cast_slice(displacement_data.as_slice()),
@@ -189,39 +190,6 @@ impl ShaderDragon {
             label: None,
             bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
             push_constant_ranges: &[],
-        });
-        let module = device.create_shader_module(ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_dragon.wgsl"))),
-        });
-        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &module,
-                entry_point: "vs_main",
-                // entry_point: "vs_main_circle",
-                buffers: &[Vertex::desc()],
-            },
-            fragment: Some(FragmentState {
-                module: &module,
-                entry_point: "fs_main",
-                targets: &[Some(renderer.config.format.into())],
-            }),
-            primitive: PrimitiveState {
-                front_face: FrontFace::Ccw,
-                cull_mode: Some(Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
-            multisample: MultisampleState::default(),
-            multiview: None,
         });
         let vp_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Camera View Projection Buffer"),
@@ -305,6 +273,39 @@ impl ShaderDragon {
                 },
             ],
             label: None,
+        });
+        let module = device.create_shader_module(ShaderModuleDescriptor {
+            label: None,
+            source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_dragon.wgsl"))),
+        });
+        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &module,
+                entry_point: "vs_main",
+                // entry_point: "vs_main_circle",
+                buffers: &[Vertex::desc()],
+            },
+            fragment: Some(FragmentState {
+                module: &module,
+                entry_point: "fs_main",
+                targets: &[Some(renderer.config.format.into())],
+            }),
+            primitive: PrimitiveState {
+                front_face: FrontFace::Ccw,
+                cull_mode: Some(Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
+            multisample: MultisampleState::default(),
+            multiview: None,
         });
         println!("created shader in {:?}", new_shader_timestamp.elapsed());
         Self {

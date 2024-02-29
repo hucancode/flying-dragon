@@ -12,7 +12,7 @@ use std::time::Instant;
 use winit::window::Window;
 
 const LIGHT_RADIUS: f32 = 50.0;
-const LIGHT_INTENSITY: f32 = 10.0;
+const LIGHT_INTENSITY: f32 = 100.0;
 
 pub struct App {
     renderer: Renderer,

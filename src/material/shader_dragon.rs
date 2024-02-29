@@ -31,7 +31,6 @@ pub struct ShaderDragon {
     pub r_buffer: Buffer,
     pub displacement_offset_buffer: Buffer,
     pub light_buffer: Buffer,
-    pub light_count_buffer: Buffer,
 }
 impl ShaderDragon {
     pub fn new(renderer: &Renderer) -> Self {
@@ -55,19 +54,9 @@ impl ShaderDragon {
                         binding: 1, // light
                         visibility: ShaderStages::FRAGMENT,
                         ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
+                            ty: BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
                             min_binding_size: BufferSize::new(0),
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2, // light count
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(size_of::<usize>() as u64),
                         },
                         count: None,
                     },
@@ -200,13 +189,7 @@ impl ShaderDragon {
         let light_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("Light Buffer"),
             size: MAX_LIGHT as BufferAddress * light_uniform_size,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let light_count_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Light Count"),
-            size: size_of::<usize>() as u64,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let bind_group_camera = device.create_bind_group(&BindGroupDescriptor {
@@ -219,10 +202,6 @@ impl ShaderDragon {
                 BindGroupEntry {
                     binding: 1,
                     resource: light_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: light_count_buffer.as_entire_binding(),
                 },
             ],
             label: None,
@@ -318,7 +297,6 @@ impl ShaderDragon {
             r_buffer,
             displacement_offset_buffer,
             light_buffer,
-            light_count_buffer,
         }
     }
 }
@@ -346,11 +324,6 @@ impl Shader for ShaderDragon {
         queue.write_buffer(&self.vp_buffer, 0, bytemuck::bytes_of(matrix));
     }
     fn write_light_data(&self, queue: &Queue, lights: &[Light]) {
-        queue.write_buffer(
-            &self.light_count_buffer,
-            0,
-            bytemuck::bytes_of(&lights.len()),
-        );
         queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(lights));
     }
 }

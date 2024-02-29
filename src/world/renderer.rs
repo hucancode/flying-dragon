@@ -88,7 +88,7 @@ impl Renderer {
             surface,
             device,
             queue,
-            time: 1000.0,
+            time: 0.0,
             depth_texture_view,
         }
     }
@@ -173,16 +173,15 @@ impl Renderer {
         let lights: Vec<Light> = lights
             .into_iter()
             .map(|(color, radius, transform)| {
-                let position = transform * Vec4::W;
+                let mut position = transform * Vec4::W;
+                position.w = radius;
                 Light {
-                    position: [position.x, position.y, position.z],
-                    radius,
-                    color: [
-                        color.r as f32,
+                    position_and_radius: position,
+                    color: Vec4::new(color.r as f32,
                         color.g as f32,
                         color.b as f32,
                         color.a as f32,
-                    ],
+                    ),
                 }
             })
             .collect();

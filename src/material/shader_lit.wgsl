@@ -11,9 +11,8 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 };
 struct Light {
-    @location(0) position: vec3<f32>,
-    @location(1) radius: f32,
-    @location(2) color: vec4<f32>,
+    position_and_radius: vec4f,
+    color: vec4f,
 };
 
 @group(0) @binding(0)
@@ -34,19 +33,21 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 }
 
 @group(1) @binding(1)
-var<uniform> lights: array<Light, MAX_LIGHT>;
-@group(1) @binding(2)
-var<uniform> light_count: u32;
+var<storage> lights: array<Light>;
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var color = vec3(0.0);
-    for (var i = 0u; i < light_count; i++) {
-        let world_to_light = lights[i].position - vertex.world_position.xyz;
-        let dist = clamp(length(world_to_light), 0.0, lights[i].radius);
-        let radiance = lights[i].color.rgb * (1.0 - dist / lights[i].radius);
+    let n = arrayLength(&lights);
+    for (var i = 0u; i < n; i++) {
+        let pos = lights[i].position_and_radius.xyz;
+        let r = lights[i].position_and_radius.w;
+        let c = lights[i].color.rgb;
+        let world_to_light = pos - vertex.world_position.xyz;
+        let dist = clamp(length(world_to_light), 0.0, r);
+        let radiance = c;// * (1.0 - dist / r);
         let strength = max(dot(vertex.normal.xyz, normalize(world_to_light)), 0.0);
         color += vertex.color.rgb * radiance * strength;
     }
-    return vec4(color, vertex.color.a);
+    return vec4(normalize(color), vertex.color.a);
 }

@@ -19,7 +19,7 @@ use wgpu::{
 
 const CURVE_RESOLUTION: i32 = 512;
 const CURVE_SCALE: f32 = 15.0;
-const CURVE_SMOOTH: i32 = 1;
+const CURVE_SMOOTH: i32 = 3;
 
 pub struct ShaderDragon {
     pub module: ShaderModule,

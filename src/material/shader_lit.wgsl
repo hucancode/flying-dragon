@@ -45,7 +45,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         let c = lights[i].color.rgb;
         let world_to_light = pos - vertex.world_position.xyz;
         let dist = clamp(length(world_to_light), 0.0, r);
-        let radiance = c;// * (1.0 - dist / r);
+        let radiance = 1.0 - clamp(dist/r, 0.0, 1.0);
         let strength = max(dot(vertex.normal.xyz, normalize(world_to_light)), 0.0);
         color += vertex.color.rgb * radiance * strength;
     }

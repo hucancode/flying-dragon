@@ -1,6 +1,6 @@
 const MAX_LIGHT = 10;
 const PI = 3.14159;
-const PATH_LEN = 200.0;
+const PATH_LEN = 400.0;
 const SPEED = 0.05;
 
 struct VertexInput {
@@ -16,7 +16,7 @@ struct VertexOutput {
 };
 struct Light {
     position_and_radius: vec4f,
-    color: vec4<f32>,
+    color: vec4f,
 };
 
 @group(0) @binding(0)
@@ -26,9 +26,13 @@ var<uniform> rotation: mat4x4<f32>;
 @group(0) @binding(2)
 var<storage> displacement_map: array<mat4x4<f32>>;
 @group(0) @binding(3)
+var<storage> rotation_offset_map: array<mat4x4<f32>>;
+@group(0) @binding(4)
 var<uniform> time: f32;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
+@group(1) @binding(1)
+var<storage> lights: array<Light>;
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
@@ -38,12 +42,14 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     let u_low = u32(floor(u))%n;
     let u_high = u32(ceil(u))%n;
     let k = fract(u);
-    let spline_low = displacement_map[u_low];
-    let spline_high = displacement_map[u_high];
+    let translation_low = displacement_map[u_low];
+    let translation_high = displacement_map[u_high];
+    let rotation_low = rotation_offset_map[u_low];
+    let rotation_high = rotation_offset_map[u_high];
     let pos = vec4f(0.0, input.position.y, input.position.z, input.position.w);
-    result.world_position = world * mix(spline_low * pos, spline_high * pos, k);
+    result.world_position = world * mix(translation_low * rotation_low * pos, translation_high * rotation_high * pos, k);
     result.position = view_proj * result.world_position;
-    result.normal = rotation * input.normal;
+    result.normal = rotation * mix(rotation_low * input.normal, rotation_high * input.normal, k);
     result.color = input.color;
     return result;
 }
@@ -63,9 +69,6 @@ fn vs_main_circle(input: VertexInput) -> VertexOutput {
     return result;
 }
 
-@group(1) @binding(1)
-var<storage> lights: array<Light>;
-
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var color = vec3(0.0);
@@ -76,9 +79,9 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         let c = lights[i].color.rgb;
         let world_to_light = pos - vertex.world_position.xyz;
         let dist = clamp(length(world_to_light), 0.0, r);
-        let radiance = c;//*(1.0 - dist / r);
+        let radiance = 1.0 - clamp(dist/r, 0.0, 1.0);
         let strength = max(dot(vertex.normal.xyz, normalize(world_to_light)), 0.0);
-        color += vertex.color.rgb * radiance * strength;
+        color += vertex.color.rgb * c * radiance * strength;
     }
     return vec4(color, vertex.color.a);
 }

@@ -17,9 +17,9 @@ use wgpu::{
     StencilState, TextureFormat, VertexState,
 };
 
-const CURVE_RESOLUTION: i32 = 128;
+const CURVE_RESOLUTION: i32 = 512;
 const CURVE_SCALE: f32 = 15.0;
-const CURVE_SMOOTH: i32 = 0;
+const CURVE_SMOOTH: i32 = 1;
 
 pub struct ShaderDragon {
     pub module: ShaderModule,
@@ -29,7 +29,7 @@ pub struct ShaderDragon {
     pub vp_buffer: Buffer,
     pub w_buffer: Buffer,
     pub r_buffer: Buffer,
-    pub displacement_offset_buffer: Buffer,
+    pub time_buffer: Buffer,
     pub light_buffer: Buffer,
 }
 impl ShaderDragon {
@@ -96,7 +96,17 @@ impl ShaderDragon {
                     count: None,
                 },
                 BindGroupLayoutEntry {
-                    binding: 3, // displacement offset
+                    binding: 3, // rotation offset map
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 4, // time
                     visibility: ShaderStages::VERTEX,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
@@ -109,7 +119,7 @@ impl ShaderDragon {
         });
         let create_displacement = |points: Vec<Vec3>| {
             let n = points.len();
-            let left_pad = points.iter().skip(n-1);
+            let left_pad = points.iter().skip(n - 1);
             let right_pad = points.iter().take(2);
             let i0 = 1;
             let points = left_pad
@@ -122,7 +132,8 @@ impl ShaderDragon {
                 })
                 .collect();
             let spline = Spline::from_vec(points);
-            let mut ret = Vec::new();
+            let mut displacement = Vec::new();
+            let mut rotation_offset = Vec::new();
             let mut last_tangent = Vec3::X;
             for j in 0..CURVE_RESOLUTION {
                 let mut tangent = Vec3::ZERO;
@@ -149,22 +160,21 @@ impl ShaderDragon {
                 }
                 let t = j as f32 / (CURVE_RESOLUTION - 1) as f32;
                 let p = spline.clamped_sample(t).unwrap_or_default() * CURVE_SCALE;
-                let transform = Mat4::from_rotation_translation(
-                    Quat::from_rotation_arc(
-                        Vec3::X,
-                        tangent.try_normalize().unwrap_or(last_tangent),
-                    ),
-                    p,
-                );
+                let translation = Mat4::from_translation(p);
+                let rotation = Mat4::from_quat(Quat::from_rotation_arc(
+                    Vec3::X,
+                    tangent.try_normalize().unwrap_or(last_tangent),
+                ));
                 last_tangent = tangent;
-                ret.push(transform);
+                displacement.push(translation);
+                rotation_offset.push(rotation);
             }
-            ret
+            (displacement, rotation_offset)
         };
         // infinity symbol oo, span from -3 -> 3
-        let points_1: Vec<Vec3> = vec![
+        let _points_1: Vec<Vec3> = vec![
             Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(2.0, 2.0, 0.0),
+            Vec3::new(2.0, 1.0, 0.0),
             Vec3::new(3.0, 0.0, 0.0),
             Vec3::new(2.0, -1.0, 0.0),
             Vec3::new(0.0, 0.0, 0.0),
@@ -186,22 +196,35 @@ impl ShaderDragon {
         // infinity symbol oo, span from -3 -> 3
         let _points_3: Vec<Vec3> = vec![
             Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(2.0, 2.0, 1.0),
+            Vec3::new(2.0, 1.0, 0.0),
             Vec3::new(3.0, 0.0, 0.0),
-            Vec3::new(2.0, -1.0, 1.0),
+            Vec3::new(2.0, -1.0, 0.0),
             Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(-2.0, 1.0, 1.0),
+            Vec3::new(-2.0, 1.0, 0.0),
             Vec3::new(-3.0, 0.0, 0.0),
-            Vec3::new(-2.0, -1.0, 1.0),
+            Vec3::new(-2.0, -1.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 1.0),
+            Vec3::new(3.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(-2.0, 0.0, 1.0),
+            Vec3::new(-3.0, 0.0, 0.0),
+            Vec3::new(-2.0, 0.0, -1.0),
         ];
-        let displacement_data: Vec<Mat4> = create_displacement(points_1);
+        let (displacement, rotation_offset) = create_displacement(_points_3);
         // println!("{:?}", texels);
-        let displacement_map_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            contents: bytemuck::cast_slice(displacement_data.as_slice()),
+        let displacement_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            contents: bytemuck::cast_slice(displacement.as_slice()),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             label: None,
         });
-        let displacement_offset_buffer = device.create_buffer(&BufferDescriptor {
+        let rotation_offset_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            contents: bytemuck::cast_slice(rotation_offset.as_slice()),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            label: None,
+        });
+        let time_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("Displacement Offset"),
             size: size_of::<f32>() as u64,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -275,12 +298,16 @@ impl ShaderDragon {
                     }),
                 },
                 BindGroupEntry {
-                    binding: 2, // displacement texture
-                    resource: displacement_map_buffer.as_entire_binding(),
+                    binding: 2, // displacement
+                    resource: displacement_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
-                    binding: 3, // offset
-                    resource: displacement_offset_buffer.as_entire_binding(),
+                    binding: 3, // rotation offset
+                    resource: rotation_offset_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 4, // time
+                    resource: time_buffer.as_entire_binding(),
                 },
             ],
             label: None,
@@ -327,7 +354,7 @@ impl ShaderDragon {
             vp_buffer,
             w_buffer,
             r_buffer,
-            displacement_offset_buffer,
+            time_buffer,
             light_buffer,
         }
     }
@@ -346,11 +373,7 @@ impl Shader for ShaderDragon {
         queue.write_buffer(&self.r_buffer, offset, bytemuck::bytes_of(matrix));
     }
     fn write_time_data(&self, queue: &Queue, time: f32) {
-        queue.write_buffer(
-            &self.displacement_offset_buffer,
-            0,
-            bytemuck::bytes_of(&(time)),
-        );
+        queue.write_buffer(&self.time_buffer, 0, bytemuck::bytes_of(&(time)));
     }
     fn write_camera_data(&self, queue: &Queue, matrix: &[f32; 16]) {
         queue.write_buffer(&self.vp_buffer, 0, bytemuck::bytes_of(matrix));

@@ -12,14 +12,14 @@ use wgpu::{
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
     DepthStencilState, DynamicOffset, Face, FragmentState, FrontFace, MultisampleState,
-    PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline,
-    RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages,
-    StencilState, TextureFormat, VertexState,
+    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass,
+    RenderPipeline, RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource,
+    ShaderStages, StencilState, TextureFormat, VertexState,
 };
 
 const CURVE_RESOLUTION: i32 = 512;
 const CURVE_SCALE: f32 = 15.0;
-const CURVE_SMOOTH: i32 = 3;
+const CURVE_SMOOTH: i32 = 0;
 
 pub struct ShaderDragon {
     pub module: ShaderModule,
@@ -46,7 +46,7 @@ impl ShaderDragon {
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
+                            min_binding_size: None,
                         },
                         count: None,
                     },
@@ -56,7 +56,7 @@ impl ShaderDragon {
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(0),
+                            min_binding_size: None,
                         },
                         count: None,
                     },
@@ -71,7 +71,7 @@ impl ShaderDragon {
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
+                        min_binding_size: None,
                     },
                     count: None,
                 },
@@ -81,7 +81,7 @@ impl ShaderDragon {
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: BufferSize::new(size_of::<Mat4>() as u64),
+                        min_binding_size: None,
                     },
                     count: None,
                 },
@@ -111,7 +111,7 @@ impl ShaderDragon {
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: BufferSize::new(size_of::<f32>() as u64),
+                        min_binding_size: None,
                     },
                     count: None,
                 },
@@ -119,46 +119,26 @@ impl ShaderDragon {
         });
         let create_displacement = |points: Vec<Vec3>| {
             let n = points.len();
-            let left_pad = points.iter().skip(n - 1);
-            let right_pad = points.iter().take(2);
             let i0 = 1;
-            let points = left_pad
-                .chain(points.iter())
-                .chain(right_pad)
+            let points = points.iter()
+                .cycle()
+                .skip(n-1)
+                .take(n+3)
                 .enumerate()
-                .map(|(i, v)| {
-                    let k = (i as f32 - i0 as f32) / n as f32;
-                    Key::new(k, *v, Interpolation::CatmullRom)
-                })
-                .collect();
-            let spline = Spline::from_vec(points);
-            let mut displacement = Vec::new();
-            let mut rotation_offset = Vec::new();
+                .map(|(i, v)| ((i as f32 - i0 as f32) / n as f32, *v))
+                .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
+            let spline = Spline::from_iter(points);
+            let mut displacement = [Mat4::IDENTITY; CURVE_RESOLUTION as usize];
+            let mut rotation_offset = [Mat4::IDENTITY; CURVE_RESOLUTION as usize];
             let mut last_tangent = Vec3::X;
+            let normalize = |i: i32, n: i32| ((i+n)%n) as f32 / n as f32;
             for j in 0..CURVE_RESOLUTION {
-                let mut tangent = Vec3::ZERO;
-                let mut weight_sum = 0.0;
-                for delta in -CURVE_SMOOTH..=CURVE_SMOOTH {
-                    let i = (j + CURVE_RESOLUTION + delta) % CURVE_RESOLUTION;
-                    let t1 = i as f32 / CURVE_RESOLUTION as f32;
-                    let t2 = ((i + 1) % CURVE_RESOLUTION) as f32 / CURVE_RESOLUTION as f32;
-                    let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
-                    let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
-                    let weight = (CURVE_SMOOTH + 1 - delta) as f32;
-                    weight_sum += weight;
-                    tangent += (p2 - p1) * weight;
-                }
-                tangent /= weight_sum;
-                let alpha = tangent.clone().angle_between(last_tangent.clone());
-                if j > 0 && alpha > 0.5 || alpha.is_nan() {
-                    let t1 = j as f32 / (CURVE_RESOLUTION - 1) as f32;
-                    let t2 = ((j + 1) % CURVE_RESOLUTION) as f32 / (n - 1) as f32;
-                    let p1 = spline.clamped_sample(t1).unwrap_or_default();
-                    let p2 = spline.clamped_sample(t2).unwrap_or_default();
-                    println!("at {j}, t1 = {t1}, t2 = {t2}, abnormal alpha = {alpha}");
-                    println!("p1 = {p1:?}, p2 = {p2:?}");
-                }
-                let t = j as f32 / (CURVE_RESOLUTION - 1) as f32;
+                let t1 = normalize(j, CURVE_RESOLUTION);
+                let t2 = normalize(j+1, CURVE_RESOLUTION);
+                let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
+                let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
+                let tangent = p2 - p1;
+                let t = normalize(j, CURVE_RESOLUTION - 1);
                 let p = spline.clamped_sample(t).unwrap_or_default() * CURVE_SCALE;
                 let translation = Mat4::from_translation(p);
                 let rotation = Mat4::from_quat(Quat::from_rotation_arc(
@@ -166,8 +146,8 @@ impl ShaderDragon {
                     tangent.try_normalize().unwrap_or(last_tangent),
                 ));
                 last_tangent = tangent;
-                displacement.push(translation);
-                rotation_offset.push(rotation);
+                displacement[j as usize] = translation;
+                rotation_offset[j as usize] = rotation;
             }
             (displacement, rotation_offset)
         };
@@ -215,17 +195,17 @@ impl ShaderDragon {
         let (displacement, rotation_offset) = create_displacement(_points_3);
         // println!("{:?}", texels);
         let displacement_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            contents: bytemuck::cast_slice(displacement.as_slice()),
+            contents: bytemuck::cast_slice(&displacement),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             label: None,
         });
         let rotation_offset_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            contents: bytemuck::cast_slice(rotation_offset.as_slice()),
+            contents: bytemuck::cast_slice(&rotation_offset),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             label: None,
         });
         let time_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Displacement Offset"),
+            label: None,
             size: size_of::<f32>() as u64,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -236,13 +216,13 @@ impl ShaderDragon {
             push_constant_ranges: &[],
         });
         let vp_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Camera View Projection Buffer"),
+            label: None,
             contents: bytemuck::cast_slice(Mat4::IDENTITY.as_ref()),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
         let light_uniform_size = size_of::<Light>() as BufferAddress;
         let light_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Light Buffer"),
+            label: None,
             size: MAX_LIGHT as BufferAddress * light_uniform_size,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -267,13 +247,13 @@ impl ShaderDragon {
             align_to(node_uniform_size, alignment)
         };
         let w_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Model world transform buffer"),
+            label: None,
             size: MAX_ENTITY as BufferAddress * node_uniform_aligned,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let r_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Model rotation buffer"),
+            label: None,
             size: MAX_ENTITY as BufferAddress * node_uniform_aligned,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -323,11 +303,13 @@ impl ShaderDragon {
                 module: &module,
                 entry_point: "vs_main",
                 // entry_point: "vs_main_circle",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[Vertex::desc()],
             },
             fragment: Some(FragmentState {
                 module: &module,
                 entry_point: "fs_main",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(renderer.config.format.into())],
             }),
             primitive: PrimitiveState {

@@ -9,9 +9,9 @@ use wgpu::{
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
     DepthStencilState, DynamicOffset, Face, FragmentState, FrontFace, MultisampleState,
-    PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline,
-    RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages,
-    StencilState, TextureFormat, VertexState,
+    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass,
+    RenderPipeline, RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource,
+    ShaderStages, StencilState, TextureFormat, VertexState,
 };
 
 use crate::geometry::Vertex;
@@ -71,11 +71,13 @@ impl ShaderUnlit {
             vertex: VertexState {
                 module: &module,
                 entry_point: "vs_main",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[Vertex::desc()],
             },
             fragment: Some(FragmentState {
                 module: &module,
                 entry_point: "fs_main",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(renderer.config.format.into())],
             }),
             primitive: PrimitiveState {

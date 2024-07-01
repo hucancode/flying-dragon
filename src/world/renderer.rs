@@ -83,7 +83,7 @@ impl Renderer {
         );
         Self {
             camera: Camera::new(),
-            root: node::new_group(),
+            root: Node::new(),
             config,
             surface,
             device,
@@ -166,7 +166,7 @@ impl Renderer {
                 _ => {}
             }
             for child in node.borrow().children.iter() {
-                let transform_mx = transform_mx * child.calculate_transform();
+                let transform_mx = transform_mx * child.borrow().calculate_transform();
                 q.push((child.clone(), transform_mx));
             }
         }
@@ -208,5 +208,8 @@ impl Renderer {
         drop(rpass);
         self.queue.submit(Some(encoder.finish()));
         frame.present();
+    }
+    pub fn add(&mut self, node: NodeRef) {
+        self.root.borrow_mut().add_child(node);
     }
 }

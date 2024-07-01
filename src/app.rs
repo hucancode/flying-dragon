@@ -2,7 +2,7 @@ use crate::geometry::Mesh;
 use crate::material::ShaderDragon;
 use crate::material::ShaderLit;
 use crate::material::ShaderUnlit;
-use crate::world::{new_entity, new_light, Node, NodeRef, Renderer};
+use crate::world::{Node, NodeRef, Renderer};
 use glam::{Quat, Vec3, Vec4};
 use splines::{Interpolation, Key, Spline};
 use std::f32::consts::PI;
@@ -36,8 +36,8 @@ impl App {
             &self.renderer.device,
         ));
         println!("loaded mesh in {:?}", app_init_timestamp.elapsed());
-        let dragon = new_entity(dragon_mesh.clone(), shader.clone());
-        self.renderer.root.add_child(dragon);
+        let dragon = Node::new_entity(dragon_mesh.clone(), shader.clone());
+        self.renderer.add(dragon);
         let lights = vec![
             (
                 wgpu::Color {
@@ -78,11 +78,11 @@ impl App {
         self.lights = lights
             .into_iter()
             .map(|(color, radius, intensity, time_offset)| {
-                let mut light = new_light(color, radius * intensity);
-                self.renderer.root.add_child(light.clone());
-                let mut cube = new_entity(cube_mesh.clone(), shader_lit.clone());
-                cube.translate(0.0, -2.0, 0.0);
-                light.add_child(cube.clone());
+                let light = Node::new_light(color, radius * intensity);
+                self.renderer.add(light.clone());
+                let cube = Node::new_entity(cube_mesh.clone(), shader_lit.clone());
+                cube.borrow_mut().translate(0.0, -2.0, 0.0);
+                light.borrow_mut().add_child(cube.clone());
                 (light, cube, time_offset)
             })
             .collect();
@@ -125,11 +125,11 @@ impl App {
                 let b = 0x00;
                 let col = 0xff + (b << 8) + (g << 16) + (r << 24);
                 let cube_mesh = Rc::new(Mesh::new_cube(col, &self.renderer.device));
-                let mut cube = new_entity(cube_mesh.clone(), shader_unlit.clone());
-                cube.translate(p1.x, p1.y, p1.z);
-                cube.rotate_quat(rotation);
-                cube.scale_x(0.2);
-                self.renderer.root.add_child(cube.clone());
+                let cube = Node::new_entity(cube_mesh.clone(), shader_unlit.clone());
+                cube.borrow_mut().translate(p1.x, p1.y, p1.z);
+                cube.borrow_mut().rotate_quat(rotation);
+                cube.borrow_mut().scale(0.2, 1.0, 1.0);
+                self.renderer.add(cube.clone());
             }
         }
         println!("app initialized in {:?}", app_init_timestamp.elapsed());
@@ -140,12 +140,12 @@ impl App {
             let rx = PI * 2.0 * (0.00042 * time as f64).sin() as f32;
             let ry = PI * 2.0 * (0.00011 * time as f64).sin() as f32;
             let rz = PI * 2.0 * (0.00027 * time as f64).sin() as f32;
-            cube.rotate(rx, ry, rz);
+            cube.borrow_mut().rotate(rx, ry, rz);
             let x = 4.0 * (0.00058 * time as f64).sin() as f32;
             let y = 4.0 * (0.00076 * time as f64).sin() as f32;
             let z = 4.0 * (0.00142 * time as f64).sin() as f32;
             let v = Vec4::new(x, y, z, 1.0).normalize() * LIGHT_RADIUS;
-            light.translate(v.x, v.y, v.z);
+            light.borrow_mut().translate(v.x, v.y, v.z);
         }
         self.renderer.time = time;
     }

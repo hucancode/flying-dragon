@@ -21,13 +21,25 @@ const CURVE_RESOLUTION: usize = 512;
 const CURVE_SCALE: f32 = 15.0;
 const BIND_GROUP_CAMERA: [(ShaderStages, BufferBindingType, bool); 2] = [
     (ShaderStages::VERTEX, BufferBindingType::Uniform, false),
-    (ShaderStages::FRAGMENT, BufferBindingType::Storage { read_only: true }, false),
+    (
+        ShaderStages::FRAGMENT,
+        BufferBindingType::Storage { read_only: true },
+        false,
+    ),
 ];
 const BIND_GROUP_NODE: [(ShaderStages, BufferBindingType, bool); 5] = [
     (ShaderStages::VERTEX, BufferBindingType::Uniform, true),
     (ShaderStages::VERTEX, BufferBindingType::Uniform, true),
-    (ShaderStages::VERTEX, BufferBindingType::Storage { read_only: true }, false),
-    (ShaderStages::VERTEX, BufferBindingType::Storage { read_only: true }, false),
+    (
+        ShaderStages::VERTEX,
+        BufferBindingType::Storage { read_only: true },
+        false,
+    ),
+    (
+        ShaderStages::VERTEX,
+        BufferBindingType::Storage { read_only: true },
+        false,
+    ),
     (ShaderStages::VERTEX, BufferBindingType::Uniform, false),
 ];
 
@@ -47,20 +59,22 @@ impl ShaderDragon {
         let device = &renderer.device;
         let new_shader_timestamp = Instant::now();
         let create_bind_group_layout = |entries: &[(ShaderStages, BufferBindingType, bool)]| {
-            let entries = entries.iter()
-                .enumerate()
-                .map(|(i, (visibility, ty, has_dynamic_offset))|
-                    BindGroupLayoutEntry {
-                        binding: i as u32,
-                        visibility: *visibility,
-                        ty: BindingType::Buffer {
-                            ty: *ty,
-                            has_dynamic_offset: *has_dynamic_offset,
-                            min_binding_size: None,
+            let entries =
+                entries
+                    .iter()
+                    .enumerate()
+                    .map(
+                        |(i, (visibility, ty, has_dynamic_offset))| BindGroupLayoutEntry {
+                            binding: i as u32,
+                            visibility: *visibility,
+                            ty: BindingType::Buffer {
+                                ty: *ty,
+                                has_dynamic_offset: *has_dynamic_offset,
+                                min_binding_size: None,
+                            },
+                            count: None,
                         },
-                        count: None,
-                    }
-                );
+                    );
             device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: None,
                 entries: entries.collect::<Vec<_>>().as_slice(),
@@ -71,30 +85,29 @@ impl ShaderDragon {
         let create_displacement = |points: Vec<Vec3>| {
             let n = points.len();
             let i0 = 1;
-            let points = points.iter()
+            let points = points
+                .iter()
                 .cycle()
-                .skip(n-1)
-                .take(n+3)
+                .skip(n - 1)
+                .take(n + 3)
                 .enumerate()
                 .map(|(i, v)| ((i as f32 - i0 as f32) / n as f32, *v))
                 .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
             let spline = Spline::from_iter(points);
             let mut translation = [Mat4::IDENTITY; CURVE_RESOLUTION];
             let mut rotation = [Mat4::IDENTITY; CURVE_RESOLUTION];
-            let normalize = |i, n| (i%n) as f32 / n as f32;
+            let normalize = |i, n| (i % n) as f32 / n as f32;
             for i in 0..CURVE_RESOLUTION {
                 let t1 = normalize(i, CURVE_RESOLUTION);
-                let t2 = normalize(i+1, CURVE_RESOLUTION);
+                let t2 = normalize(i + 1, CURVE_RESOLUTION);
                 let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
                 let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
                 let tangent = p2 - p1;
                 let t = normalize(i, CURVE_RESOLUTION - 1);
                 let p = spline.clamped_sample(t).unwrap_or_default() * CURVE_SCALE;
                 translation[i] = Mat4::from_translation(p);
-                rotation[i] = Mat4::from_quat(Quat::from_rotation_arc(
-                    Vec3::X,
-                    tangent.normalize(),
-                ));
+                rotation[i] =
+                    Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent.normalize()));
             }
             (translation, rotation)
         };

@@ -286,6 +286,7 @@ impl ShaderDragon {
             }),
             multisample: MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
         println!("created shader in {:?}", new_shader_timestamp.elapsed());
         Self {

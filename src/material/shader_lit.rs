@@ -120,6 +120,7 @@ impl ShaderLit {
             }),
             multisample: MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
         let vp_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Camera View Projection Buffer"),

@@ -2,10 +2,11 @@ use crate::geometry::Mesh;
 use crate::material::Shader;
 use glam::{f32::Quat, EulerRot, Mat4, Vec3};
 use std::{cell::RefCell, rc::Rc};
+use wgpu::Color;
 
 pub enum Variant {
     Entity(Rc<Mesh>, Rc<dyn Shader>),
-    Light(wgpu::Color, f32),
+    Light(Color, f32),
     Group,
 }
 
@@ -44,7 +45,7 @@ impl Node {
         Rc::new(RefCell::new(Node::default()))
     }
 
-    pub fn new_light(color: wgpu::Color, radius: f32) -> NodeRef {
+    pub fn new_light(color: Color, radius: f32) -> NodeRef {
         Rc::new(RefCell::new(Node {
             variant: Variant::Light(color, radius),
             ..Default::default()

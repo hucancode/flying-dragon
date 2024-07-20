@@ -9,35 +9,48 @@ use std::f32::consts::PI;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Instant;
-use winit::window::Window;
+use winit::application::ApplicationHandler;
+use winit::event::{StartCause, WindowEvent};
+use winit::event_loop::ActiveEventLoop;
+use winit::window::{Window, WindowId};
 
 const LIGHT_RADIUS: f32 = 50.0;
 const LIGHT_INTENSITY: f32 = 2.0;
 
 pub struct App {
-    renderer: Renderer,
+    window: Option<Arc<Window>>,
+    start_time_stamp: Instant,
+    renderer: Option<Renderer>,
     lights: Vec<(NodeRef, NodeRef, u128)>,
 }
 
-impl App {
-    pub async fn new(window: Arc<Window>) -> Self {
-        let renderer = Renderer::new(window).await;
+impl Default for App {
+    fn default() -> Self {
         Self {
-            renderer,
+            window: None,
+            start_time_stamp: Instant::now(),
+            renderer: None,
             lights: Vec::new(),
         }
     }
-    pub fn init(&mut self) {
+}
+
+impl App {
+    pub async fn init(&mut self) {
+        if self.window.is_none() {
+            return;
+        }
+        let mut renderer = Renderer::new(self.window.as_ref().unwrap().clone()).await;
         let app_init_timestamp = Instant::now();
-        let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &self.renderer.device));
-        let shader = Rc::new(ShaderDragon::new(&self.renderer));
+        let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &renderer.device));
+        let shader = Rc::new(ShaderDragon::new(&renderer));
         let dragon_mesh = Rc::new(Mesh::load_obj(
             include_bytes!("assets/dragon.obj"),
-            &self.renderer.device,
+            &renderer.device,
         ));
         println!("loaded mesh in {:?}", app_init_timestamp.elapsed());
         let dragon = Node::new_entity(dragon_mesh.clone(), shader.clone());
-        self.renderer.add(dragon);
+        renderer.add(dragon);
         let lights = vec![
             (
                 wgpu::Color {
@@ -73,13 +86,13 @@ impl App {
                 4400,
             ),
         ];
-        let shader_lit = Rc::new(ShaderLit::new(&self.renderer));
-        let shader_unlit = Rc::new(ShaderUnlit::new(&self.renderer));
+        let shader_lit = Rc::new(ShaderLit::new(&renderer));
+        let shader_unlit = Rc::new(ShaderUnlit::new(&renderer));
         self.lights = lights
             .into_iter()
             .map(|(color, radius, intensity, time_offset)| {
                 let light = Node::new_light(color, radius * intensity);
-                self.renderer.add(light.clone());
+                renderer.add(light.clone());
                 let cube = Node::new_entity(cube_mesh.clone(), shader_lit.clone());
                 cube.borrow_mut().translate(0.0, -2.0, 0.0);
                 light.borrow_mut().add_child(cube.clone());
@@ -124,17 +137,18 @@ impl App {
                 let g = 0x40;
                 let b = 0x00;
                 let col = 0xff + (b << 8) + (g << 16) + (r << 24);
-                let cube_mesh = Rc::new(Mesh::new_cube(col, &self.renderer.device));
+                let cube_mesh = Rc::new(Mesh::new_cube(col, &renderer.device));
                 let cube = Node::new_entity(cube_mesh.clone(), shader_unlit.clone());
                 cube.borrow_mut().translate(p1.x, p1.y, p1.z);
                 cube.borrow_mut().rotate_quat(rotation);
                 cube.borrow_mut().scale(0.2, 1.0, 1.0);
-                self.renderer.add(cube.clone());
+                renderer.add(cube.clone());
             }
         }
         println!("app initialized in {:?}", app_init_timestamp.elapsed());
+        self.renderer = Some(renderer);
     }
-    pub fn update(&mut self, _delta_time: f32, time: f32) {
+    pub fn update(&mut self, time: f32) {
         for (light, cube, time_offset) in self.lights.iter_mut() {
             let time = time + *time_offset as f32;
             let rx = PI * 2.0 * (0.00042 * time as f64).sin() as f32;
@@ -147,14 +161,43 @@ impl App {
             let v = Vec4::new(x, y, z, 1.0).normalize() * LIGHT_RADIUS;
             light.borrow_mut().translate(v.x, v.y, v.z);
         }
-        self.renderer.time = time;
+        if let Some(renderer) = self.renderer.as_mut() {
+            renderer.time = time;
+        }
     }
+}
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.renderer.resize(width, height);
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window = event_loop
+            .create_window(Window::default_attributes().with_title("Dragon"))
+            .unwrap();
+        self.window = Some(Arc::new(window));
+        pollster::block_on(self.init());
     }
-
-    pub fn draw(&self) {
-        self.renderer.draw();
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
+        if cause == StartCause::Poll {
+            let time = self.start_time_stamp.elapsed().as_millis() as f32;
+            self.update(time);
+            if let Some(window) = self.window.as_ref() {
+                window.request_redraw();
+            }
+        }
+    }
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        if event == WindowEvent::CloseRequested {
+            event_loop.exit();
+        } else if let Some(renderer) = self.renderer.as_mut() {
+            match event {
+                WindowEvent::RedrawRequested => renderer.draw(),
+                WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
+                _ => {}
+            }
+        }
     }
 }

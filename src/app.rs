@@ -161,9 +161,8 @@ impl App {
             let v = Vec4::new(x, y, z, 1.0).normalize() * LIGHT_RADIUS;
             light.borrow_mut().translate(v.x, v.y, v.z);
         }
-        if let Some(renderer) = self.renderer.as_mut() {
-            renderer.time = time;
-        }
+        let Some(renderer) = self.renderer.as_mut() else { return };
+        renderer.time = time;
     }
 }
 
@@ -179,9 +178,8 @@ impl ApplicationHandler for App {
         if cause == StartCause::Poll {
             let time = self.start_time_stamp.elapsed().as_millis() as f32;
             self.update(time);
-            if let Some(window) = self.window.as_ref() {
-                window.request_redraw();
-            }
+            let Some(window) = self.window.as_ref() else { return };
+            window.request_redraw();
         }
     }
     fn window_event(

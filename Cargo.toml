@@ -4,10 +4,7 @@ version = "0.3.2"
 edition = "2021"
 
 [dependencies]
-winit = "0.30.4"
-nix = { version = "0.26", features = [
-    "fs",
-] } # winit could not build without this
+winit = "0.30.7"
 log = "0.4"
 wgpu = { version = "23.0", features = ["webgl"] }
 bytemuck = { version = "1.21", features = ["derive"] }

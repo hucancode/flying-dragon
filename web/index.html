@@ -10,6 +10,8 @@
                     console.error(
                         "Something wrong when initialize graphics: " + e,
                     );
+                } finally {
+                    document.getElementById("loading").remove();
                 }
             }
             run();
@@ -27,7 +29,14 @@
                 display: block;
                 margin: auto;
             }
+            #loading {
+                margin: auto;
+                font-size: 24px;
+            }
         </style>
     </head>
-    <body></body>
+    <body>
+        <h1 id="loading">Loading...</h1>
+        <canvas id="canvas"></canvas>
+    </body>
 </html>

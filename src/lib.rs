@@ -15,7 +15,7 @@ pub fn run_wasm() {
 
 #[cfg(target_arch = "wasm32")]
 fn init_logger() {
-    let base_level = log::LevelFilter::Info;
+    let base_level = log::LevelFilter::Debug;
     let wgpu_level = log::LevelFilter::Error;
     // On web, we use fern, as console_log doesn't have filtering on a per-module level.
     fern::Dispatch::new()
@@ -31,11 +31,13 @@ fn init_logger() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn init_logger() {
+    let base_level = log::LevelFilter::Debug;
+    let wgpu_level = log::LevelFilter::Error;
     env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
-        .filter_module("wgpu_core", log::LevelFilter::Info)
-        .filter_module("wgpu_hal", log::LevelFilter::Error)
-        .filter_module("naga", log::LevelFilter::Error)
+        .filter_level(base_level)
+        .filter_module("wgpu_core", wgpu_level)
+        .filter_module("wgpu_hal", wgpu_level)
+        .filter_module("naga", wgpu_level)
         .parse_default_env()
         .init();
 }

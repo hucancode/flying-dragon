@@ -184,8 +184,21 @@ impl ApplicationHandler<Renderer> for App {
             .with_inner_size(PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
         #[cfg(target_arch = "wasm32")]
         {
+            use wasm_bindgen::JsCast;
+            use web_sys::HtmlCanvasElement;
+            use wgpu::web_sys;
             use winit::platform::web::WindowAttributesExtWebSys;
-            attr = attr.with_append(true);
+            // use first canvas element, or create one if none found
+            let canvas = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.query_selector("canvas").ok())
+                .and_then(|c| c)
+                .and_then(|c| c.dyn_into::<HtmlCanvasElement>().ok());
+            if let Some(canvas) = canvas {
+                attr = attr.with_canvas(Some(canvas));
+            } else {
+                attr = attr.with_append(true);
+            }
         }
         #[cfg(not(target_arch = "wasm32"))]
         {

@@ -5,7 +5,10 @@ use glam::{Mat4, Quat, Vec3};
 use splines::{Interpolation, Key, Spline};
 use std::borrow::Cow;
 use std::mem::size_of;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
@@ -153,7 +156,7 @@ impl ShaderDragon {
             Vec3::new(-2.0, 0.0, -1.0),
         ];
         let (displacement, rotation_offset) = create_displacement(_points_3);
-        // println!("{:?}", texels);
+        // log::info!("{:?}", texels);
         let displacement_buffer = device.create_buffer_init(&BufferInitDescriptor {
             contents: bytemuck::cast_slice(&displacement),
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
@@ -261,14 +264,13 @@ impl ShaderDragon {
             layout: Some(&pipeline_layout),
             vertex: VertexState {
                 module: &module,
-                entry_point: "vs_main",
-                // entry_point: "vs_main_circle",
+                entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[Vertex::desc()],
             },
             fragment: Some(FragmentState {
                 module: &module,
-                entry_point: "fs_main",
+                entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(renderer.config.format.into())],
             }),
@@ -288,7 +290,7 @@ impl ShaderDragon {
             multiview: None,
             cache: None,
         });
-        println!("created shader in {:?}", new_shader_timestamp.elapsed());
+        log::info!("created shader in {:?}", new_shader_timestamp.elapsed());
         Self {
             module,
             render_pipeline,

@@ -1,9 +1,5 @@
-use flying_dragon::App;
-use winit::event_loop::{ControlFlow, EventLoop};
+use flying_dragon::run;
+
 fn main() {
-    env_logger::init();
-    let mut app = App::default();
-    let event_loop = EventLoop::new().unwrap();
-    event_loop.set_control_flow(ControlFlow::Poll);
-    event_loop.run_app(&mut app).unwrap();
+    run();
 }

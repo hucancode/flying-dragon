@@ -2,7 +2,10 @@ use crate::material::Shader;
 use glam::Mat4;
 use std::borrow::Cow;
 use std::mem::size_of;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
@@ -96,13 +99,13 @@ impl ShaderLit {
             layout: Some(&pipeline_layout),
             vertex: VertexState {
                 module: &module,
-                entry_point: "vs_main",
+                entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[Vertex::desc()],
             },
             fragment: Some(FragmentState {
                 module: &module,
-                entry_point: "fs_main",
+                entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(renderer.config.format.into())],
             }),
@@ -187,7 +190,7 @@ impl ShaderLit {
             ],
             label: None,
         });
-        println!("created shader in {:?}", new_shader_timestamp.elapsed());
+        log::info!("created shader in {:?}", new_shader_timestamp.elapsed());
         Self {
             module,
             render_pipeline,

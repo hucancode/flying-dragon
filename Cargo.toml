@@ -1,15 +1,29 @@
 [package]
 name = "flying-dragon"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 
 [dependencies]
 winit = "0.30.4"
+nix = { version = "0.26", features = [
+    "fs",
+] } # winit could not build without this
 env_logger = "0.10"
 log = "0.4"
-wgpu = "^22.0.0"
-bytemuck = { version = "1.12", features = ["derive"] }
-pollster = "0.3.0"
-glam = { version = "0.24.2", features = ["bytemuck"] }
-tobj = "4.0.0"
-splines = { version = "4.3.1", features = ["glam"] }
+wgpu = { version = "23.0", features = ["webgl"] }
+bytemuck = { version = "1.21", features = ["derive"] }
+pollster = "0.4.0"
+glam = { version = "0.24", features = ["bytemuck"] }
+tobj = "4.0"
+splines = { version = "4.4", features = ["glam"] }
+fern = "0.7"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = "0.1"
+web-time = "1.1"
+console_log = "1.0.0"
+getrandom = { version = "0.2", features = [
+    "js",
+] } # wasm could not work without this

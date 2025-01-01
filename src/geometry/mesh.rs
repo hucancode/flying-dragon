@@ -43,9 +43,9 @@ impl Mesh {
             let mut indices = Vec::new();
             for model in models {
                 let mesh = model.mesh;
-                // println!("pos: {:?}", mesh.positions.len());
-                // println!("index: {:?}", mesh.normal_indices.len());
-                // println!("index: {:?}", mesh.indices.len());
+                // log::info!("pos: {:?}", mesh.positions.len());
+                // log::info!("index: {:?}", mesh.normal_indices.len());
+                // log::info!("index: {:?}", mesh.indices.len());
                 let offset = vertices.len() as u32;
                 let n = mesh.positions.len();
                 for i in 0..n / 3 {

@@ -8,39 +8,48 @@ use splines::{Interpolation, Key, Spline};
 use std::f32::consts::PI;
 use std::rc::Rc;
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
-use winit::event_loop::ActiveEventLoop;
+use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
 
 const LIGHT_RADIUS: f32 = 50.0;
 const LIGHT_INTENSITY: f32 = 2.0;
+const WINDOW_WIDTH: u32 = 1024;
+const WINDOW_HEIGHT: u32 = 768;
 
 pub struct App {
     window: Option<Arc<Window>>,
     start_time_stamp: Instant,
     renderer: Option<Renderer>,
     lights: Vec<(NodeRef, NodeRef, u128)>,
+    event_loop: Option<EventLoopProxy<Renderer>>,
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+    pub fn new(event_loop: &EventLoop<Renderer>) -> Self {
         Self {
             window: None,
             start_time_stamp: Instant::now(),
             renderer: None,
             lights: Vec::new(),
+            event_loop: Some(event_loop.create_proxy()),
         }
     }
 }
 
 impl App {
-    pub async fn init(&mut self) {
-        if self.window.is_none() {
+    pub async fn make_renderer(window: Arc<Window>) -> Renderer {
+        Renderer::new(window.clone(), WINDOW_WIDTH, WINDOW_HEIGHT).await
+    }
+    pub fn init(&mut self) {
+        let Some(renderer) = self.renderer.as_mut() else {
             return;
-        }
-        let mut renderer = Renderer::new(self.window.as_ref().unwrap().clone()).await;
+        };
         let app_init_timestamp = Instant::now();
         let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &renderer.device));
         let shader = Rc::new(ShaderDragon::new(&renderer));
@@ -48,7 +57,7 @@ impl App {
             include_bytes!("assets/dragon.obj"),
             &renderer.device,
         ));
-        println!("loaded mesh in {:?}", app_init_timestamp.elapsed());
+        log::info!("loaded mesh in {:?}", app_init_timestamp.elapsed());
         let dragon = Node::new_entity(dragon_mesh.clone(), shader.clone());
         renderer.add(dragon);
         let lights = vec![
@@ -145,8 +154,7 @@ impl App {
                 renderer.add(cube.clone());
             }
         }
-        println!("app initialized in {:?}", app_init_timestamp.elapsed());
-        self.renderer = Some(renderer);
+        log::info!("app initialized in {:?}", app_init_timestamp.elapsed());
     }
     pub fn update(&mut self, time: f32) {
         for (light, cube, time_offset) in self.lights.iter_mut() {
@@ -161,26 +169,71 @@ impl App {
             let v = Vec4::new(x, y, z, 1.0).normalize() * LIGHT_RADIUS;
             light.borrow_mut().translate(v.x, v.y, v.z);
         }
-        let Some(renderer) = self.renderer.as_mut() else { return };
+        let Some(renderer) = self.renderer.as_mut() else {
+            return;
+        };
         renderer.time = time;
     }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<Renderer> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = event_loop
-            .create_window(Window::default_attributes().with_title("Dragon"))
-            .unwrap();
-        self.window = Some(Arc::new(window));
-        pollster::block_on(self.init());
+        use winit::dpi::PhysicalSize;
+        log::info!("creating window...");
+        let mut attr = Window::default_attributes()
+            .with_inner_size(PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::platform::web::WindowAttributesExtWebSys;
+            attr = attr.with_append(true);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            attr = attr.with_title("Dragon");
+        }
+        let window = Arc::new(event_loop.create_window(attr).unwrap());
+        let Some(event_loop) = self.event_loop.take() else {
+            return;
+        };
+        self.window = Some(window.clone());
+        log::info!(
+            "window created! inner size {:?} outer size {:?}",
+            window.inner_size(),
+            window.outer_size(),
+        );
+        log::info!("creating renderer...");
+        #[cfg(target_arch = "wasm32")]
+        {
+            wasm_bindgen_futures::spawn_local(async move {
+                let renderer = App::make_renderer(window).await;
+                log::info!("renderer created!");
+                if let Err(_renderer) = event_loop.send_event(renderer) {
+                    log::error!("Failed to send renderer back to application thread");
+                }
+            });
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let renderer = pollster::block_on(App::make_renderer(window));
+            if let Err(_renderer) = event_loop.send_event(renderer) {
+                log::error!("Failed to send renderer back to application thread");
+            }
+        }
     }
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
         if cause == StartCause::Poll {
             let time = self.start_time_stamp.elapsed().as_millis() as f32;
             self.update(time);
-            let Some(window) = self.window.as_ref() else { return };
+            let Some(window) = self.window.as_ref() else {
+                return;
+            };
             window.request_redraw();
         }
+    }
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, renderer: Renderer) {
+        log::info!("got renderer!");
+        self.renderer = Some(renderer);
+        self.init();
     }
     fn window_event(
         &mut self,
@@ -189,13 +242,18 @@ impl ApplicationHandler for App {
         event: WindowEvent,
     ) {
         if event == WindowEvent::CloseRequested {
+            log::debug!("window close requested");
             event_loop.exit();
-        } else if let Some(renderer) = self.renderer.as_mut() {
-            match event {
-                WindowEvent::RedrawRequested => renderer.draw(),
-                WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
-                _ => {}
-            }
+            return;
+        }
+        let Some(renderer) = self.renderer.as_mut() else {
+            log::debug!("got event {event:?}, but no renderer to handle that");
+            return;
+        };
+        match event {
+            WindowEvent::RedrawRequested => renderer.draw(),
+            WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
+            _ => {}
         }
     }
 }

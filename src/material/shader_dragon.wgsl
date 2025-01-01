@@ -54,7 +54,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     return result;
 }
 
-@vertex
+// @vertex
 fn vs_main_circle(input: VertexInput) -> VertexOutput {
     let RADIUS = 60.0 - input.position.z;
     var result: VertexOutput;

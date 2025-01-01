@@ -8,15 +8,17 @@ winit = "0.30.4"
 nix = { version = "0.26", features = [
     "fs",
 ] } # winit could not build without this
-env_logger = "0.10"
 log = "0.4"
 wgpu = { version = "23.0", features = ["webgl"] }
 bytemuck = { version = "1.21", features = ["derive"] }
-pollster = "0.4.0"
 glam = { version = "0.24", features = ["bytemuck"] }
 tobj = "4.0"
 splines = { version = "4.4", features = ["glam"] }
 fern = "0.7"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.10"
+pollster = "0.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"

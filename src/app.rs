@@ -54,7 +54,7 @@ impl App {
         let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &renderer.device));
         let shader = Rc::new(ShaderDragon::new(&renderer));
         let dragon_mesh = Rc::new(Mesh::load_obj(
-            include_bytes!("assets/dragon.obj"),
+            include_bytes!("assets/dragon-low.obj"),
             &renderer.device,
         ));
         log::info!("loaded mesh in {:?}", app_init_timestamp.elapsed());

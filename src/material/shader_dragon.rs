@@ -16,8 +16,8 @@ use wgpu::{
     BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
     DepthStencilState, DynamicOffset, Face, FragmentState, FrontFace, MultisampleState,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass,
-    RenderPipeline, RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource,
-    ShaderStages, StencilState, TextureFormat, VertexState,
+    RenderPipeline, RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    StencilState, TextureFormat, VertexState,
 };
 
 const CURVE_RESOLUTION: usize = 512;
@@ -47,7 +47,6 @@ const BIND_GROUP_NODE: [(ShaderStages, BufferBindingType, bool); 5] = [
 ];
 
 pub struct ShaderDragon {
-    pub module: ShaderModule,
     pub render_pipeline: RenderPipeline,
     pub bind_group_camera: BindGroup,
     pub bind_group_node: BindGroup,
@@ -292,7 +291,6 @@ impl ShaderDragon {
         });
         log::info!("created shader in {:?}", new_shader_timestamp.elapsed());
         Self {
-            module,
             render_pipeline,
             bind_group_camera,
             bind_group_node,

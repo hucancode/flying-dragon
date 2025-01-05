@@ -1,5 +1,11 @@
 !#/usr/bin/sh
 which wasm-bindgen python3 || { echo "python3 and wasm-bindgen is required"; exit 1; }
-cargo build --target wasm32-unknown-unknown
-wasm-bindgen --out-dir web --target web ./target/wasm32-unknown-unknown/debug/flying-dragon.wasm
-python3 -m http.server --directory web
+# use first parameter as build type
+CONFIG=${1:-debug}
+TARGET=wasm32-unknown-unknown
+WASM_OUTPUT=./target/$TARGET/$CONFIG/flying-dragon.wasm
+WEB_OUTPUT=web
+echo "Building for $CONFIG"
+cargo build --target $TARGET --$CONFIG || { echo "cargo build failed"; exit 1; }
+wasm-bindgen --out-dir $WEB_OUTPUT --target web $WASM_OUTPUT --no-typescript || { echo "wasm-bindgen failed"; exit 1; }
+python3 -m http.server --directory $WEB_OUTPUT

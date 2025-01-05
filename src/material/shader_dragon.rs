@@ -20,7 +20,7 @@ use wgpu::{
     StencilState, TextureFormat, VertexState,
 };
 
-const CURVE_RESOLUTION: usize = 512;
+const CURVE_RESOLUTION: usize = 1024;
 const CURVE_SCALE: f32 = 15.0;
 const BIND_GROUP_CAMERA: [(ShaderStages, BufferBindingType, bool); 2] = [
     (ShaderStages::VERTEX, BufferBindingType::Uniform, false),
@@ -88,12 +88,12 @@ impl ShaderDragon {
             let n = points.len();
             let i0 = 1;
             let points = points
-                .iter()
+                .into_iter()
                 .cycle()
                 .skip(n - 1)
                 .take(n + 3)
                 .enumerate()
-                .map(|(i, v)| ((i as f32 - i0 as f32) / n as f32, *v))
+                .map(|(i, v)| ((i as f32 - i0 as f32) / n as f32, v))
                 .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
             let spline = Spline::from_iter(points);
             let mut translation = [Mat4::IDENTITY; CURVE_RESOLUTION];
@@ -105,11 +105,23 @@ impl ShaderDragon {
                 let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
                 let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
                 let tangent = p2 - p1;
-                let t = normalize(i, CURVE_RESOLUTION - 1);
-                let p = spline.clamped_sample(t).unwrap_or_default() * CURVE_SCALE;
-                translation[i] = Mat4::from_translation(p);
+                translation[i] = Mat4::from_translation(p1);
                 rotation[i] =
                     Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent.normalize()));
+            }
+            const DOUBLE_CHECK_TRANSFORMATION: bool = false;
+            // check if there are any sudden change in translation or rotation
+            if DOUBLE_CHECK_TRANSFORMATION {
+                for i in 0..CURVE_RESOLUTION {
+                    let j = (i + 1) % CURVE_RESOLUTION;
+                    let (_, _, p1) = translation[i].to_scale_rotation_translation();
+                    let (_, _, p2) = translation[j].to_scale_rotation_translation();
+                    let (_, r1, _) = rotation[j].to_scale_rotation_translation();
+                    let (_, r2, _) = rotation[j].to_scale_rotation_translation();
+                    let dt = p2.distance(p1);
+                    let dr = r2.angle_between(r1) * 180.0 / std::f32::consts::PI;
+                    log::info!("{}: dt {:?}, dr {:?}", i, dt, dr);
+                }
             }
             (translation, rotation)
         };
@@ -142,13 +154,13 @@ impl ShaderDragon {
             Vec3::new(3.0, 0.0, 0.0),
             Vec3::new(2.0, -1.0, 0.0),
             Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(-2.0, 1.0, 0.0),
+            Vec3::new(-3.0, 2.0, 0.0),
             Vec3::new(-3.0, 0.0, 0.0),
-            Vec3::new(-2.0, -1.0, 0.0),
+            Vec3::new(-3.0, -2.0, 0.0),
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(2.0, 0.0, 1.0),
             Vec3::new(3.0, 0.0, 0.0),
-            Vec3::new(2.0, 0.0, -1.0),
+            Vec3::new(3.0, 0.0, -1.0),
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(-2.0, 0.0, 1.0),
             Vec3::new(-3.0, 0.0, 0.0),

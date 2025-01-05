@@ -38,10 +38,13 @@ var<storage> lights: array<Light>;
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
     let n = arrayLength(&displacement_map);
-    let u = (input.position.x + time*SPEED)/PATH_LEN*f32(n) + f32(n);
-    let u_low = u32(floor(u))%n;
-    let u_high = u32(ceil(u))%n;
-    let k = fract(u);
+    let u = (input.position.x + time*SPEED)/PATH_LEN*f32(n);
+    let u_low = (u32(floor(u)) + n)%n;
+    let u_high = (u32(ceil(u)) + n)%n;
+    var k = fract(u);
+    if (k < 0.0) {
+        k += 1.0;
+    }
     let translation_low = displacement_map[u_low];
     let translation_high = displacement_map[u_high];
     let rotation_low = rotation_offset_map[u_low];
@@ -71,8 +74,8 @@ fn vs_main_circle(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    var color = vec3(0.0);
     let n = arrayLength(&lights);
+    var light_color = vec3(0.0);
     for (var i = 0u; i < n; i++) {
         let pos = lights[i].position_and_radius.xyz;
         let r = lights[i].position_and_radius.w;
@@ -81,7 +84,8 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         let dist = clamp(length(world_to_light), 0.0, r);
         let radiance = 1.0 - clamp(dist/r, 0.0, 1.0);
         let strength = max(dot(vertex.normal.xyz, normalize(world_to_light)), 0.0);
-        color += vertex.color.rgb * c * radiance * strength;
+        light_color += c * radiance * strength * lights[i].color.a;
     }
+    var color = vertex.color.rgb * light_color;
     return vec4(color, vertex.color.a);
 }

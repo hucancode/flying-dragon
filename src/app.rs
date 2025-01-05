@@ -13,12 +13,15 @@ use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
 use winit::application::ApplicationHandler;
+use winit::event::ElementState;
 use winit::event::{StartCause, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
+use winit::keyboard::KeyCode;
+use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
 
-const LIGHT_RADIUS: f32 = 50.0;
-const LIGHT_INTENSITY: f32 = 2.0;
+const LIGHT_RADIUS: f32 = 70.0;
+const LIGHT_INTENSITY: f32 = 60.0;
 const WINDOW_WIDTH: u32 = 1024;
 const WINDOW_HEIGHT: u32 = 768;
 
@@ -63,10 +66,10 @@ impl App {
         let lights = vec![
             (
                 wgpu::Color {
-                    r: 0.0,
-                    g: 0.5,
-                    b: 1.0,
-                    a: 1.0,
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.5,
                 },
                 LIGHT_RADIUS,
                 LIGHT_INTENSITY,
@@ -75,9 +78,9 @@ impl App {
             (
                 wgpu::Color {
                     r: 0.0,
-                    g: 0.5,
-                    b: 1.0,
-                    a: 1.0,
+                    g: 1.0,
+                    b: 0.0,
+                    a: 0.5,
                 },
                 LIGHT_RADIUS,
                 LIGHT_INTENSITY,
@@ -86,9 +89,9 @@ impl App {
             (
                 wgpu::Color {
                     r: 0.0,
-                    g: 1.0,
-                    b: 0.5,
-                    a: 1.0,
+                    g: 0.0,
+                    b: 1.0,
+                    a: 0.5,
                 },
                 LIGHT_RADIUS,
                 LIGHT_INTENSITY,
@@ -110,9 +113,16 @@ impl App {
             .collect();
         const DEBUG_SPLINE: bool = false;
         if DEBUG_SPLINE {
-            // infinity symbol oo
+            // infinity symbol oo, span from -3 -> 3
             let points: Vec<Vec3> = vec![
-                Vec3::new(-2.0, 0.0, -1.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(2.0, 1.0, 0.0),
+                Vec3::new(3.0, 0.0, 0.0),
+                Vec3::new(2.0, -1.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(-2.0, 1.0, 0.0),
+                Vec3::new(-3.0, 0.0, 0.0),
+                Vec3::new(-2.0, -1.0, 0.0),
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(2.0, 0.0, 1.0),
                 Vec3::new(3.0, 0.0, 0.0),
@@ -121,30 +131,30 @@ impl App {
                 Vec3::new(-2.0, 0.0, 1.0),
                 Vec3::new(-3.0, 0.0, 0.0),
                 Vec3::new(-2.0, 0.0, -1.0),
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(2.0, 0.0, 1.0),
             ];
             let n = points.len();
+            let i0 = 1;
             let points = points
                 .into_iter()
-                .map(|v| v * 30.0)
+                .cycle()
+                .skip(n - 1)
+                .take(n + 3)
                 .enumerate()
-                .map(|(i, v)| {
-                    let k = (i as f32 - 1.0) / (n - 3) as f32;
-                    Key::new(k, v, Interpolation::CatmullRom)
-                })
-                .collect();
-            let spline = Spline::from_vec(points);
-            let n = 80;
+                .map(|(i, v)| ((i as f32 - i0 as f32) / n as f32, v))
+                .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
+            let spline = Spline::from_iter(points);
+            const CURVE_SCALE: f32 = 20.0;
+            let n = 100;
+            let normalize = |i, n| (i % n) as f32 / n as f32;
             for i in 0..n {
-                let t1 = i as f32 / (n - 1) as f32;
-                let t2 = ((i + 1) % n) as f32 / (n - 1) as f32;
-                let p1 = spline.clamped_sample(t1).unwrap_or(Vec3::ZERO);
-                let p2 = spline.clamped_sample(t2).unwrap_or(Vec3::ZERO);
+                let t1 = normalize(i, n);
+                let t2 = normalize(i + 1, n);
+                let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
+                let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
                 let rotation = Quat::from_rotation_arc(Vec3::X, (p2 - p1).normalize());
-                let r = ((t1 - 0.5).abs() * 512.0) as u32;
-                let g = 0x40;
-                let b = 0x00;
+                let r = (t1 * 256.0) as u32;
+                let g = r;
+                let b = r;
                 let col = 0xff + (b << 8) + (g << 16) + (r << 24);
                 let cube_mesh = Rc::new(Mesh::new_cube(col, &renderer.device));
                 let cube = Node::new_entity(cube_mesh.clone(), shader_unlit.clone());
@@ -163,9 +173,9 @@ impl App {
             let ry = PI * 2.0 * (0.00011 * time as f64).sin() as f32;
             let rz = PI * 2.0 * (0.00027 * time as f64).sin() as f32;
             cube.borrow_mut().rotate(rx, ry, rz);
-            let x = 4.0 * (0.00058 * time as f64).sin() as f32;
-            let y = 4.0 * (0.00076 * time as f64).sin() as f32;
-            let z = 4.0 * (0.00142 * time as f64).sin() as f32;
+            let x = (0.00058 * time as f64).sin() as f32;
+            let y = (0.00076 * time as f64).sin() as f32;
+            let z = (0.00042 * time as f64).sin() as f32;
             let v = Vec4::new(x, y, z, 1.0).normalize() * LIGHT_RADIUS;
             light.borrow_mut().translate(v.x, v.y, v.z);
         }
@@ -266,6 +276,32 @@ impl ApplicationHandler<Renderer> for App {
         match event {
             WindowEvent::RedrawRequested => renderer.draw(),
             WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
+            WindowEvent::KeyboardInput {
+                device_id: _dev,
+                event,
+                is_synthetic: _synthetic,
+            } => {
+                log::info!("keyboard pressed {:?}", event);
+                match (event.physical_key, event.state) {
+                    // space to restart animation
+                    (PhysicalKey::Code(KeyCode::Space), ElementState::Released) => {
+                        self.start_time_stamp = Instant::now();
+                    }
+                    // escape to exit
+                    (PhysicalKey::Code(KeyCode::Escape), ElementState::Released) => {
+                        event_loop.exit();
+                    }
+                    // tab to pause/play animation
+                    (PhysicalKey::Code(KeyCode::Tab), ElementState::Released) => {
+                        match event_loop.control_flow() {
+                            ControlFlow::Poll => event_loop.set_control_flow(ControlFlow::Wait),
+                            ControlFlow::Wait => event_loop.set_control_flow(ControlFlow::Poll),
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }

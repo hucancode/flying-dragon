@@ -38,9 +38,9 @@ var<storage> lights: array<Light>;
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
     let n = arrayLength(&displacement_map);
-    let u = (input.position.x + time*SPEED)/PATH_LEN*f32(n);
-    let u_low = (u32(floor(u)) + n)%n;
-    let u_high = (u32(ceil(u)) + n)%n;
+    let u = (input.position.x + time*SPEED)/PATH_LEN*f32(n)+f32(n);
+    let u_low = u32(floor(u))%n;
+    let u_high = u32(ceil(u))%n;
     var k = fract(u);
     if (k < 0.0) {
         k += 1.0;

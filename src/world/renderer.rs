@@ -12,8 +12,8 @@ use wgpu::{
     BufferAddress, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d,
     IndexFormat, Instance, LoadOp, Operations, Queue, RenderPassColorAttachment,
     RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp,
-    Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureView, TextureViewDescriptor,
+    Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -63,9 +63,10 @@ impl Renderer {
             "requested device in {:?}",
             device_request_timestamp.elapsed()
         );
-        let config = surface
+        let mut config = surface
             .get_default_config(&adapter, max(1, width), max(1, height))
-            .unwrap();
+            .expect("Surface must be supported by adapter");
+        config.view_formats.push(config.format.add_srgb_suffix());
         surface.configure(&device, &config);
         let depth_texture = device.create_texture(&TextureDescriptor {
             size: Extent3d {
@@ -120,14 +121,24 @@ impl Renderer {
     }
 
     pub fn draw(&self) {
-        let frame = self
-            .surface
-            .get_current_texture()
-            .expect("Failed to acquire next swap chain texture");
+        let frame = match self.surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(SurfaceError::Timeout) => {
+                log::error!("timed out getting surface texture, skip drawing this frame");
+                return;
+            }
+            Err(e) => {
+                self.surface.configure(&self.device, &self.config);
+                log::error!(
+                    "Something wrong when getting surface texture {e:?}, skip drawing this frame",
+                );
+                return;
+            }
+        };
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
         let mut encoder = self
             .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&CommandEncoderDescriptor::default());
         let mut nodes = Vec::new();
         let mut lights: Vec<(Color, f32, Mat4)> = Vec::new();
         nodes.clear();

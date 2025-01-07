@@ -292,7 +292,7 @@ impl ApplicationHandler<Renderer> for App {
                         event_loop.exit();
                     }
                     // tab to pause/play animation
-                    (PhysicalKey::Code(KeyCode::Tab), ElementState::Released) => {
+                    (PhysicalKey::Code(KeyCode::KeyP), ElementState::Released) => {
                         match event_loop.control_flow() {
                             ControlFlow::Poll => event_loop.set_control_flow(ControlFlow::Wait),
                             ControlFlow::Wait => event_loop.set_control_flow(ControlFlow::Poll),

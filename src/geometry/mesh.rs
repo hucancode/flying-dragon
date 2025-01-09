@@ -59,7 +59,7 @@ impl Mesh {
                         } else {
                             [mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]]
                         };
-                        let col = 0xffff77ff;
+                        let col = 0xffffaaff;
                         vertices.push(Vertex::new(pos, nor, col));
                     }
                     for i in mesh.indices {

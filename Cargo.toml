@@ -1,6 +1,6 @@
 [package]
 name = "flying-dragon"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
@@ -12,6 +12,7 @@ glam = { version = "0.24", features = ["bytemuck"] }
 tobj = "4.0"
 splines = { version = "4.4", features = ["glam"] }
 fern = "0.7"
+rand = "0.8.5"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.10"

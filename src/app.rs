@@ -21,7 +21,7 @@ use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
 
 const LIGHT_RADIUS: f32 = 70.0;
-const LIGHT_INTENSITY: f32 = 60.0;
+const LIGHT_INTENSITY: f32 = 200.0;
 const WINDOW_WIDTH: u32 = 1024;
 const WINDOW_HEIGHT: u32 = 768;
 
@@ -55,7 +55,7 @@ impl App {
         };
         let app_init_timestamp = Instant::now();
         let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &renderer.device));
-        let shader = Rc::new(ShaderDragon::new(&renderer));
+        let shader = Rc::new(ShaderDragon::new(renderer));
         let dragon_mesh = Rc::new(Mesh::load_obj(
             include_bytes!("assets/dragon-low.obj"),
             &renderer.device,
@@ -98,8 +98,8 @@ impl App {
                 4400,
             ),
         ];
-        let shader_lit = Rc::new(ShaderLit::new(&renderer));
-        let shader_unlit = Rc::new(ShaderUnlit::new(&renderer));
+        let shader_lit = Rc::new(ShaderLit::new(renderer));
+        let shader_unlit = Rc::new(ShaderUnlit::new(renderer));
         self.lights = lights
             .into_iter()
             .map(|(color, radius, intensity, time_offset)| {
@@ -291,7 +291,7 @@ impl ApplicationHandler<Renderer> for App {
                     (PhysicalKey::Code(KeyCode::Escape), ElementState::Released) => {
                         event_loop.exit();
                     }
-                    // tab to pause/play animation
+                    // P to pause/play animation
                     (PhysicalKey::Code(KeyCode::KeyP), ElementState::Released) => {
                         match event_loop.control_flow() {
                             ControlFlow::Poll => event_loop.set_control_flow(ControlFlow::Wait),

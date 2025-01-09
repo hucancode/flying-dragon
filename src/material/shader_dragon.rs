@@ -1,6 +1,7 @@
 use crate::geometry::Vertex;
 use crate::material::Shader;
 use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
+use core::f32;
 use glam::{Mat4, Quat, Vec3};
 use splines::{Interpolation, Key, Spline};
 use std::borrow::Cow;
@@ -87,13 +88,37 @@ impl ShaderDragon {
         let create_displacement = |points: Vec<Vec3>| {
             let n = points.len();
             let i0 = 1;
-            let points = points
+            let mut d = 0.0;
+            let mut distances = vec![0.0; n];
+            for i in 1..n {
+                let j = i - 1;
+                let p1 = points[i];
+                let p2 = points[j];
+                d += p2.distance(p1);
+                distances[i] = d;
+            }
+            d += points[n - 1].distance(points[0]);
+            for distance in distances.iter_mut().skip(1) {
+                *distance /= d;
+            }
+            // calculate distance traveled from beginning to each point and use it as key
+            let distances = distances
                 .into_iter()
                 .cycle()
-                .skip(n - 1)
-                .take(n + 3)
-                .enumerate()
-                .map(|(i, v)| ((i as f32 - i0 as f32) / n as f32, v))
+                .skip(n - i0)
+                .take(n + i0 * 2 + 1);
+            let distances = distances.enumerate().map(|(i, v)| {
+                if i < i0 {
+                    v - 1.0
+                } else if i > n {
+                    v + 1.0
+                } else {
+                    v
+                }
+            });
+            let points = points.into_iter().cycle().skip(n - i0).take(n + i0 * 2 + 1);
+            let points = distances
+                .zip(points)
                 .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
             let spline = Spline::from_iter(points);
             let mut translation = [Mat4::IDENTITY; CURVE_RESOLUTION];
@@ -166,7 +191,40 @@ impl ShaderDragon {
             Vec3::new(-3.0, 0.0, 0.0),
             Vec3::new(-2.0, 0.0, -1.0),
         ];
-        let (displacement, rotation_offset) = create_displacement(_points_3);
+        // randomly generate curve from [-3,3] each point distanced not more than 1.0 from the last point
+        let mut last_point = Vec3::ZERO;
+        let _points_4: Vec<Vec3> = (0..60)
+            .map(|_| {
+                let random_point_in_front = |last_point: Vec3| -> Vec3 {
+                    use rand::random;
+                    use std::f32::consts::PI;
+                    const LENGTH: f32 = 2.5;
+                    const MAX_DISTANCE: f32 = 4.5;
+                    const MAX_RETRY: usize = 20;
+                    let mut best_point = Vec3::ONE;
+                    let mut best_angle = f32::MAX;
+                    for _ in 0..MAX_RETRY {
+                        let point = Vec3::new(
+                            (random::<f32>() - 0.5) * 2.0 * LENGTH,
+                            (random::<f32>() - 0.5) * 2.0 * LENGTH,
+                            (random::<f32>() - 0.5) * 2.0 * LENGTH,
+                        );
+                        let angle = point.angle_between(last_point);
+                        if angle < best_angle {
+                            best_angle = angle;
+                            best_point = point;
+                        }
+                        if angle < PI && (point + last_point).length() < MAX_DISTANCE {
+                            return point;
+                        }
+                    }
+                    best_point
+                };
+                last_point += random_point_in_front(last_point);
+                last_point
+            })
+            .collect();
+        let (displacement, rotation_offset) = create_displacement(_points_4);
         // log::info!("{:?}", texels);
         let displacement_buffer = device.create_buffer_init(&BufferInitDescriptor {
             contents: bytemuck::cast_slice(&displacement),

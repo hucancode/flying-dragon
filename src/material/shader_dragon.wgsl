@@ -1,7 +1,7 @@
 const MAX_LIGHT = 10;
 const PI = 3.14159;
-const PATH_LEN = 400.0;
-const SPEED = 0.05;
+const PATH_LEN = 2000.0;
+const SPEED = 0.07;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -76,6 +76,7 @@ fn vs_main_circle(input: VertexInput) -> VertexOutput {
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let n = arrayLength(&lights);
     var light_color = vec3(0.0);
+    let ambient = vec3(0.1, 0.2, 0.1);
     for (var i = 0u; i < n; i++) {
         let pos = lights[i].position_and_radius.xyz;
         let r = lights[i].position_and_radius.w;
@@ -86,6 +87,6 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         let strength = max(dot(vertex.normal.xyz, normalize(world_to_light)), 0.0);
         light_color += c * radiance * strength * lights[i].color.a;
     }
-    var color = vertex.color.rgb * light_color;
+    var color = vertex.color.rgb * light_color + ambient;
     return vec4(color, vertex.color.a);
 }

@@ -217,15 +217,10 @@ impl ShaderDragon {
                             best_score = score;
                             best_direction = direction;
                         }
-                        log::info!(
-                            "try {direction:?} score {score}, last 2 points {last_last_point:?} -> {last_point:?} angle {angle} distance {distance}"
-                        );
                         if score < PI {
-                            log::info!("go to direction {direction:?} with score {score}");
                             return direction;
                         }
                     }
-                    log::info!("go to direction {best_direction:?} with score {best_score}");
                     best_direction
                 };
                 let delta = random_point_in_front(last_last_point, last_point);

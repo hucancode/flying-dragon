@@ -192,35 +192,45 @@ impl ShaderDragon {
             Vec3::new(-2.0, 0.0, -1.0),
         ];
         // randomly generate curve from [-3,3] each point distanced not more than 1.0 from the last point
-        let mut last_point = Vec3::ZERO;
+        let mut last_last_point = Vec3::ZERO;
+        let mut last_point = Vec3::ONE;
         let _points_4: Vec<Vec3> = (0..60)
             .map(|_| {
-                let random_point_in_front = |last_point: Vec3| -> Vec3 {
+                let random_point_in_front = |last_last_point: Vec3, last_point: Vec3| -> Vec3 {
                     use rand::random;
                     use std::f32::consts::PI;
                     const LENGTH: f32 = 2.5;
                     const MAX_DISTANCE: f32 = 4.5;
                     const MAX_RETRY: usize = 20;
-                    let mut best_point = Vec3::ONE;
-                    let mut best_angle = f32::MAX;
+                    let mut best_direction = Vec3::ONE;
+                    let mut best_score = f32::MAX;
                     for _ in 0..MAX_RETRY {
-                        let point = Vec3::new(
+                        let direction = Vec3::new(
                             (random::<f32>() - 0.5) * 2.0 * LENGTH,
                             (random::<f32>() - 0.5) * 2.0 * LENGTH,
                             (random::<f32>() - 0.5) * 2.0 * LENGTH,
                         );
-                        let angle = point.angle_between(last_point);
-                        if angle < best_angle {
-                            best_angle = angle;
-                            best_point = point;
+                        let distance = (direction + last_point).length();
+                        let angle = direction.angle_between(last_point - last_last_point).abs();
+                        let score = angle + distance / MAX_DISTANCE * PI;
+                        if score < best_score {
+                            best_score = score;
+                            best_direction = direction;
                         }
-                        if angle < PI && (point + last_point).length() < MAX_DISTANCE {
-                            return point;
+                        log::info!(
+                            "try {direction:?} score {score}, last 2 points {last_last_point:?} -> {last_point:?} angle {angle} distance {distance}"
+                        );
+                        if score < PI {
+                            log::info!("go to direction {direction:?} with score {score}");
+                            return direction;
                         }
                     }
-                    best_point
+                    log::info!("go to direction {best_direction:?} with score {best_score}");
+                    best_direction
                 };
-                last_point += random_point_in_front(last_point);
+                let delta = random_point_in_front(last_last_point, last_point);
+                last_last_point = last_point;
+                last_point += delta;
                 last_point
             })
             .collect();

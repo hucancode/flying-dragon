@@ -7,13 +7,13 @@ use std::sync::Arc;
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
-use wgpu::util::align_to;
+use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    BufferAddress, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d,
-    IndexFormat, Instance, LoadOp, Operations, Queue, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp,
-    Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color, CommandEncoderDescriptor, Device,
+    DeviceDescriptor, Extent3d, IndexFormat, Instance, LoadOp, Operations, Queue,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -227,5 +227,20 @@ impl Renderer {
     }
     pub fn add(&mut self, node: NodeRef) {
         self.root.borrow_mut().add_child(node);
+    }
+    pub fn create_buffer(&self, size: u64, usage: BufferUsages) -> Buffer {
+        self.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size,
+            usage: usage | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        })
+    }
+    pub fn create_buffer_init(&self, contents: &[u8], usage: BufferUsages) -> Buffer {
+        self.device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents,
+            usage: usage | BufferUsages::COPY_DST,
+        })
     }
 }

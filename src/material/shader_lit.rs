@@ -6,11 +6,11 @@ use std::mem::size_of;
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
-use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
+use wgpu::util::align_to;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferAddress, BufferBinding,
-    BufferBindingType, BufferDescriptor, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
+    BufferBindingType, BufferSize, BufferUsages, CompareFunction, DepthBiasState,
     DepthStencilState, DynamicOffset, Face, FragmentState, FrontFace, MultisampleState,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass,
     RenderPipeline, RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages,
@@ -124,18 +124,15 @@ impl ShaderLit {
             multiview: None,
             cache: None,
         });
-        let vp_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Camera View Projection Buffer"),
-            contents: bytemuck::cast_slice(Mat4::IDENTITY.as_ref()),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
+        let vp_buffer = renderer.create_buffer_init(
+            bytemuck::cast_slice(Mat4::IDENTITY.as_ref()),
+            BufferUsages::UNIFORM,
+        );
         let light_uniform_size = size_of::<Light>() as BufferAddress;
-        let light_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Light Buffer"),
-            size: MAX_LIGHT as BufferAddress * light_uniform_size,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let light_buffer = renderer.create_buffer(
+            MAX_LIGHT as BufferAddress * light_uniform_size,
+            BufferUsages::STORAGE,
+        );
         let bind_group_camera = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_camera,
             entries: &[
@@ -155,18 +152,14 @@ impl ShaderLit {
             let alignment = device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
             align_to(node_uniform_size, alignment)
         };
-        let w_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Model world transform buffer"),
-            size: MAX_ENTITY as BufferAddress * node_uniform_aligned,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let r_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Model rotation buffer"),
-            size: MAX_ENTITY as BufferAddress * node_uniform_aligned,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let w_buffer = renderer.create_buffer(
+            MAX_ENTITY as BufferAddress * node_uniform_aligned,
+            BufferUsages::UNIFORM,
+        );
+        let r_buffer = renderer.create_buffer(
+            MAX_ENTITY as BufferAddress * node_uniform_aligned,
+            BufferUsages::UNIFORM,
+        );
         let bind_group_node = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_node,
             entries: &[

@@ -83,8 +83,28 @@ impl ShaderDragon {
                 entries: entries.collect::<Vec<_>>().as_slice(),
             })
         };
+        let create_buffer = |size, usage| {
+            device.create_buffer(&BufferDescriptor {
+                label: None,
+                size,
+                usage: usage | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        };
+        let create_buffer_init = |contents, usage| {
+            device.create_buffer_init(&BufferInitDescriptor {
+                label: None,
+                contents,
+                usage: usage | BufferUsages::COPY_DST,
+            })
+        };
         let bind_group_layout_camera = create_bind_group_layout(&BIND_GROUP_CAMERA);
         let bind_group_layout_node = create_bind_group_layout(&BIND_GROUP_NODE);
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
+            push_constant_ranges: &[],
+        });
         let create_displacement = |points: Vec<Vec3>| {
             let n = points.len();
             let i0 = 1;
@@ -150,69 +170,26 @@ impl ShaderDragon {
             }
             (translation, rotation)
         };
-        // infinity symbol oo, span from -3 -> 3
-        let _points_1: Vec<Vec3> = vec![
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(2.0, 1.0, 0.0),
-            Vec3::new(3.0, 0.0, 0.0),
-            Vec3::new(2.0, -1.0, 0.0),
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(-2.0, 1.0, 0.0),
-            Vec3::new(-3.0, 0.0, 0.0),
-            Vec3::new(-2.0, -1.0, 0.0),
-        ];
-        // infinity symbol oo, span from -3 -> 3
-        let _points_2: Vec<Vec3> = vec![
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(2.0, 0.0, 1.0),
-            Vec3::new(3.0, 0.0, 0.0),
-            Vec3::new(2.0, 0.0, -1.0),
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(-2.0, 0.0, 1.0),
-            Vec3::new(-3.0, 0.0, 0.0),
-            Vec3::new(-2.0, 0.0, -1.0),
-        ];
-        // infinity symbol oo, span from -3 -> 3
-        let _points_3: Vec<Vec3> = vec![
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(2.0, 1.0, 0.0),
-            Vec3::new(3.0, 0.0, 0.0),
-            Vec3::new(2.0, -1.0, 0.0),
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(-3.0, 2.0, 0.0),
-            Vec3::new(-3.0, 0.0, 0.0),
-            Vec3::new(-3.0, -2.0, 0.0),
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(2.0, 0.0, 1.0),
-            Vec3::new(3.0, 0.0, 0.0),
-            Vec3::new(3.0, 0.0, -1.0),
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(-2.0, 0.0, 1.0),
-            Vec3::new(-3.0, 0.0, 0.0),
-            Vec3::new(-2.0, 0.0, -1.0),
-        ];
-        // randomly generate curve from [-3,3] each point distanced not more than 1.0 from the last point
-        let mut last_last_point = Vec3::ZERO;
-        let mut last_point = Vec3::ONE;
-        let _points_4: Vec<Vec3> = (0..60)
-            .map(|_| {
+        let seed_points_in_range = |n, max_distance| {
+            let mut last_last_point = Vec3::ZERO;
+            let mut last_point = Vec3::ONE;
+            (0..n).map(|_| {
                 let random_point_in_front = |last_last_point: Vec3, last_point: Vec3| -> Vec3 {
                     use rand::random;
                     use std::f32::consts::PI;
-                    const LENGTH: f32 = 2.5;
-                    const MAX_DISTANCE: f32 = 4.5;
+                    let length: f32 = max_distance * 0.5;
                     const MAX_RETRY: usize = 20;
                     let mut best_direction = Vec3::ONE;
                     let mut best_score = f32::MAX;
                     for _ in 0..MAX_RETRY {
                         let direction = Vec3::new(
-                            (random::<f32>() - 0.5) * 2.0 * LENGTH,
-                            (random::<f32>() - 0.5) * 2.0 * LENGTH,
-                            (random::<f32>() - 0.5) * 2.0 * LENGTH,
+                            (random::<f32>() - 0.5) * 2.0 * length,
+                            (random::<f32>() - 0.5) * 2.0 * length,
+                            (random::<f32>() - 0.5) * 2.0 * length,
                         );
                         let distance = (direction + last_point).length();
                         let angle = direction.angle_between(last_point - last_last_point).abs();
-                        let score = angle + distance / MAX_DISTANCE * PI;
+                        let score = angle + distance / max_distance * PI;
                         if score < best_score {
                             best_score = score;
                             best_direction = direction;
@@ -228,42 +205,16 @@ impl ShaderDragon {
                 last_point += delta;
                 last_point
             })
-            .collect();
-        let (displacement, rotation_offset) = create_displacement(_points_4);
+            .collect()
+        };
+        let (displacement, rotation_offset) = create_displacement(seed_points_in_range(60, 4.5));
         // log::info!("{:?}", texels);
-        let displacement_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            contents: bytemuck::cast_slice(&displacement),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            label: None,
-        });
-        let rotation_offset_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            contents: bytemuck::cast_slice(&rotation_offset),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            label: None,
-        });
-        let time_buffer = device.create_buffer(&BufferDescriptor {
-            label: None,
-            size: size_of::<f32>() as u64,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
-            push_constant_ranges: &[],
-        });
-        let vp_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(Mat4::IDENTITY.as_ref()),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
+        let displacement_buffer = create_buffer_init(bytemuck::cast_slice(&displacement), BufferUsages::STORAGE);
+        let rotation_offset_buffer = create_buffer_init(bytemuck::cast_slice(&rotation_offset), BufferUsages::STORAGE);
+        let time_buffer = create_buffer(size_of::<f32>() as u64, BufferUsages::UNIFORM);
+        let vp_buffer = create_buffer_init(bytemuck::cast_slice(Mat4::IDENTITY.as_ref()), BufferUsages::UNIFORM);
         let light_uniform_size = size_of::<Light>() as BufferAddress;
-        let light_buffer = device.create_buffer(&BufferDescriptor {
-            label: None,
-            size: MAX_LIGHT as BufferAddress * light_uniform_size,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let light_buffer = create_buffer(MAX_LIGHT as BufferAddress * light_uniform_size, BufferUsages::STORAGE);
         let bind_group_camera = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_camera,
             entries: &[
@@ -283,18 +234,8 @@ impl ShaderDragon {
             let alignment = device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
             align_to(node_uniform_size, alignment)
         };
-        let w_buffer = device.create_buffer(&BufferDescriptor {
-            label: None,
-            size: MAX_ENTITY as BufferAddress * node_uniform_aligned,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let r_buffer = device.create_buffer(&BufferDescriptor {
-            label: None,
-            size: MAX_ENTITY as BufferAddress * node_uniform_aligned,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let w_buffer = create_buffer(MAX_ENTITY as BufferAddress * node_uniform_aligned, BufferUsages::UNIFORM);
+        let r_buffer = create_buffer(MAX_ENTITY as BufferAddress * node_uniform_aligned, BufferUsages::UNIFORM);
         let bind_group_node = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_node,
             entries: &[

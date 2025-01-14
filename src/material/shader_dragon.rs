@@ -61,6 +61,10 @@ impl ShaderDragon {
     pub fn new(renderer: &Renderer) -> Self {
         let device = &renderer.device;
         let new_shader_timestamp = Instant::now();
+        let align = |n| {
+            let alignment = device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
+            align_to(n, alignment)
+        };
         let create_bind_group_layout = |entries: &[(ShaderStages, BufferBindingType, bool)]| {
             let entries =
                 entries
@@ -225,14 +229,10 @@ impl ShaderDragon {
             label: None,
         });
         let node_uniform_size = size_of::<Mat4>() as BufferAddress;
-        let node_uniform_aligned = {
-            let alignment = device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
-            align_to(node_uniform_size, alignment)
-        };
         let w_buffer =
-            renderer.create_buffer(MAX_ENTITY * node_uniform_aligned, BufferUsages::UNIFORM);
+            renderer.create_buffer(MAX_ENTITY * align(node_uniform_size), BufferUsages::UNIFORM);
         let r_buffer =
-            renderer.create_buffer(MAX_ENTITY * node_uniform_aligned, BufferUsages::UNIFORM);
+            renderer.create_buffer(MAX_ENTITY * align(node_uniform_size), BufferUsages::UNIFORM);
         let bind_group_node = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_node,
             entries: &[

@@ -206,9 +206,8 @@ impl ShaderDragon {
             bytemuck::cast_slice(Mat4::IDENTITY.as_ref()),
             BufferUsages::UNIFORM,
         );
-        let light_uniform_size = size_of::<Light>() as BufferAddress;
         let light_buffer = renderer.create_buffer(
-            MAX_LIGHT as BufferAddress * light_uniform_size,
+            MAX_LIGHT * size_of::<Light>() as BufferAddress,
             BufferUsages::STORAGE,
         );
         let bind_group_camera = device.create_bind_group(&BindGroupDescriptor {
@@ -230,14 +229,10 @@ impl ShaderDragon {
             let alignment = device.limits().min_uniform_buffer_offset_alignment as BufferAddress;
             align_to(node_uniform_size, alignment)
         };
-        let w_buffer = renderer.create_buffer(
-            MAX_ENTITY as BufferAddress * node_uniform_aligned,
-            BufferUsages::UNIFORM,
-        );
-        let r_buffer = renderer.create_buffer(
-            MAX_ENTITY as BufferAddress * node_uniform_aligned,
-            BufferUsages::UNIFORM,
-        );
+        let w_buffer =
+            renderer.create_buffer(MAX_ENTITY * node_uniform_aligned, BufferUsages::UNIFORM);
+        let r_buffer =
+            renderer.create_buffer(MAX_ENTITY * node_uniform_aligned, BufferUsages::UNIFORM);
         let bind_group_node = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_node,
             entries: &[

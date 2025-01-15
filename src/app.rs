@@ -270,7 +270,7 @@ impl ApplicationHandler<Renderer> for App {
             return;
         }
         let Some(renderer) = self.renderer.as_mut() else {
-            log::debug!("got event {event:?}, but no renderer to handle that");
+            log::debug!("got event {event:?}, but there is no renderer to handle that");
             return;
         };
         match event {

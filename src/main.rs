@@ -1,5 +1,5 @@
 use flying_dragon::run;
-
-fn main() {
-    run();
+use winit::error::EventLoopError;
+fn main() -> Result<(), EventLoopError> {
+    run()
 }

@@ -54,11 +54,11 @@ impl Renderer {
                 ..Default::default()
             })
             .await
-            .expect("Failed to find an appropriate adapter");
+            .expect("An appropriate adapter must exist!");
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor::default(), None)
             .await
-            .expect("Failed to create device");
+            .expect("A device must be present");
         log::info!(
             "requested device in {:?}",
             device_request_timestamp.elapsed()

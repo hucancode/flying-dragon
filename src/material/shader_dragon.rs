@@ -284,7 +284,7 @@ impl ShaderDragon {
                 module: &module,
                 entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(renderer.config.format.into())],
+                targets: &[Some(renderer.config.view_formats[0].into())],
             }),
             primitive: PrimitiveState {
                 front_face: FrontFace::Ccw,

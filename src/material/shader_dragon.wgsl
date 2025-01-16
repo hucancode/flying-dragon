@@ -76,7 +76,7 @@ fn vs_main_circle(input: VertexInput) -> VertexOutput {
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let n = arrayLength(&lights);
     var light_color = vec3(0.0);
-    let ambient = vec3(0.1, 0.2, 0.1);
+    let ambient = vec3(0.0, 0.05, 0.02);
     for (var i = 0u; i < n; i++) {
         let pos = lights[i].position_and_radius.xyz;
         let r = lights[i].position_and_radius.w;

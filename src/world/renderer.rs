@@ -9,12 +9,7 @@ use std::time::Instant;
 use web_time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    BackendOptions, Backends, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color,
-    CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, IndexFormat, Instance,
-    InstanceDescriptor, InstanceFlags, LoadOp, Operations, Queue, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp,
-    Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    BackendOptions, Backends, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, IndexFormat, Instance, InstanceDescriptor, InstanceFlags, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor
 };
 use winit::window::Window;
 
@@ -152,10 +147,7 @@ impl Renderer {
                 return;
             }
         };
-        let view = frame.texture.create_view(&TextureViewDescriptor {
-            format: Some(self.config.format.add_srgb_suffix()),
-            ..Default::default()
-        });
+        let view = frame.texture.create_view(&TextureViewDescriptor::default());
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor::default());

@@ -9,7 +9,12 @@ use std::time::Instant;
 use web_time::Instant;
 use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    BackendOptions, Backends, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, IndexFormat, Instance, InstanceDescriptor, InstanceFlags, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor
+    BackendOptions, Backends, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color,
+    CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, IndexFormat, Instance,
+    InstanceDescriptor, InstanceFlags, LoadOp, Operations, Queue, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp,
+    Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -36,12 +41,11 @@ pub struct Renderer {
 
 impl Renderer {
     fn adapt_texture_format(format: TextureFormat) -> TextureFormat {
-        #[cfg(target_arch = "wasm32")]
-        {
+        return format.remove_srgb_suffix();
+        #[cfg(target_arch = "wasm32")] {
             format.add_srgb_suffix()
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
+        #[cfg(not(target_arch = "wasm32"))] {
             format.remove_srgb_suffix()
         }
     }

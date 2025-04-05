@@ -1,6 +1,6 @@
 use crate::geometry::Vertex;
 use crate::material::Shader;
-use crate::world::{Light, Renderer, MAX_ENTITY, MAX_LIGHT};
+use crate::world::{Light, MAX_ENTITY, MAX_LIGHT, Renderer};
 use core::f32;
 use glam::{Mat4, Quat, Vec3};
 use splines::{Interpolation, Key, Spline};

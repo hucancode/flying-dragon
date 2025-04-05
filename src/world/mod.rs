@@ -6,6 +6,6 @@ pub use camera::Camera;
 pub use light::Light;
 pub use node::Node;
 pub use node::NodeRef;
-pub use renderer::Renderer;
 pub use renderer::MAX_ENTITY;
 pub use renderer::MAX_LIGHT;
+pub use renderer::Renderer;

@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use std::mem::size_of;
-use wgpu::{vertex_attr_array, BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode};
+use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode, vertex_attr_array};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]

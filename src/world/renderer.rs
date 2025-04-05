@@ -1,4 +1,4 @@
-use crate::world::{node, Camera, Light, Node, NodeRef};
+use crate::world::{Camera, Light, Node, NodeRef, node};
 use glam::{Mat4, Vec4};
 use std::cmp::max;
 use std::mem::size_of;
@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
-use wgpu::util::{align_to, BufferInitDescriptor, DeviceExt};
+use wgpu::util::{BufferInitDescriptor, DeviceExt, align_to};
 use wgpu::{
     BackendOptions, Backends, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color,
     CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, IndexFormat, Instance,
@@ -41,11 +41,12 @@ pub struct Renderer {
 
 impl Renderer {
     fn adapt_texture_format(format: TextureFormat) -> TextureFormat {
-        return format.remove_srgb_suffix();
-        #[cfg(target_arch = "wasm32")] {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
             format.add_srgb_suffix()
         }
-        #[cfg(not(target_arch = "wasm32"))] {
+        #[cfg(target_arch = "wasm32")]
+        {
             format.remove_srgb_suffix()
         }
     }

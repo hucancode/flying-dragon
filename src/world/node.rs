@@ -1,6 +1,6 @@
 use crate::geometry::Mesh;
 use crate::material::Shader;
-use glam::{f32::Quat, EulerRot, Mat4, Vec3};
+use glam::{EulerRot, Mat4, Vec3, f32::Quat};
 use std::{cell::RefCell, rc::Rc};
 use wgpu::Color;
 

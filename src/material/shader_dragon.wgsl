@@ -15,7 +15,8 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 };
 struct Light {
-    position_and_radius: vec4f,
+    position: vec3f,
+    radius: f32,
     color: vec4f,
 };
 
@@ -78,8 +79,8 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var light_color = vec3(0.0);
     let ambient = vec3(0.02, 0.02, 0.01);
     for (var i = 0u; i < n; i++) {
-        let pos = lights[i].position_and_radius.xyz;
-        let r = lights[i].position_and_radius.w;
+        let pos = lights[i].position;
+        let r = lights[i].radius;
         let c = lights[i].color.rgb;
         let world_to_light = pos - vertex.world_position.xyz;
         let dist = clamp(length(world_to_light), 0.0, r);

@@ -1,5 +1,5 @@
-use crate::world::{Camera, Light, Node, NodeRef, node};
-use glam::{Mat4, Vec4};
+use crate::world::{node, Camera, Light, Node, NodeRef};
+use glam::{Mat4, Vec4, Vec4Swizzles};
 use std::cmp::max;
 use std::mem::size_of;
 use std::sync::Arc;
@@ -11,10 +11,10 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt, align_to};
 use wgpu::{
     BackendOptions, Backends, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color,
     CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, IndexFormat, Instance,
-    InstanceDescriptor, InstanceFlags, LoadOp, Operations, Queue, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp,
-    Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    InstanceDescriptor, InstanceFlags, Limits, LoadOp, Operations, Queue,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -53,7 +53,7 @@ impl Renderer {
     pub async fn new(window: Arc<Window>, width: u32, height: u32) -> Renderer {
         let new_renderer_timestamp = Instant::now();
         let instance = Instance::new(&InstanceDescriptor {
-            backends: Backends::PRIMARY,
+            backends: Backends::all(),
             flags: InstanceFlags::from_env_or_default(),
             backend_options: BackendOptions::from_env_or_default(),
         });
@@ -71,8 +71,14 @@ impl Renderer {
             .await
             .expect("An appropriate adapter must exist!");
         let (device, queue) = adapter
-            .request_device(&DeviceDescriptor::default(), None)
+            .request_device(&DeviceDescriptor::default())
             .await
+            .or(adapter
+                .request_device(&DeviceDescriptor {
+                    required_limits: Limits::downlevel_webgl2_defaults(),
+                    ..Default::default()
+                })
+                .await)
             .expect("A device must be present");
         log::info!(
             "requested device in {:?}",
@@ -209,7 +215,8 @@ impl Renderer {
                 let mut position = transform * Vec4::W;
                 position.w = radius;
                 Light {
-                    position_and_radius: position,
+                    position: position.xyz(),
+                    radius,
                     color: Vec4::new(
                         color.r as f32,
                         color.g as f32,

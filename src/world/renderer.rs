@@ -17,6 +17,9 @@ use wgpu::{
     TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
+use egui_wgpu::Renderer as EguiRenderer;
+use egui_winit::State as EguiState;
+use egui::{Context};
 
 pub const MAX_ENTITY: u64 = 100000;
 pub const MAX_LIGHT: u64 = 10;
@@ -26,7 +29,6 @@ const CLEAR_COLOR: Color = Color {
     b: 0.02388235294,
     a: 1.0,
 };
-const CAMERA_DISTANCE: f32 = 60.0;
 
 pub struct Renderer {
     pub camera: Camera,
@@ -37,6 +39,11 @@ pub struct Renderer {
     pub device: Device,
     pub queue: Queue,
     depth_texture_view: TextureView,
+    pub egui_state: EguiState,
+    pub egui_renderer: EguiRenderer,
+    pub egui_context: Context,
+    pub regenerate_path: bool,
+    window: Arc<Window>,
 }
 
 impl Renderer {
@@ -57,7 +64,7 @@ impl Renderer {
             flags: InstanceFlags::from_env_or_default(),
             backend_options: BackendOptions::from_env_or_default(),
         });
-        let surface = instance.create_surface(window).unwrap();
+        let surface = instance.create_surface(window.clone()).unwrap();
         log::info!(
             "created surface size {width}x{height} in {:?}",
             new_renderer_timestamp.elapsed()
@@ -110,6 +117,19 @@ impl Renderer {
             "in total, created new renderer in {:?}",
             new_renderer_timestamp.elapsed()
         );
+        
+        let egui_context = Context::default();
+        let viewport_id = egui_context.viewport_id();
+        let egui_state = EguiState::new(
+            egui_context.clone(),
+            viewport_id,
+            &window,
+            None,
+            None,
+            None,
+        );
+        let egui_renderer = EguiRenderer::new(&device, config.format, None, 1, true);
+        
         Self {
             camera: Camera::new(),
             root: Node::new(),
@@ -119,6 +139,11 @@ impl Renderer {
             queue,
             time: 0.0,
             depth_texture_view,
+            egui_state,
+            egui_renderer,
+            egui_context,
+            regenerate_path: false,
+            window,
         }
     }
 
@@ -143,7 +168,11 @@ impl Renderer {
         self.depth_texture_view = depth_texture.create_view(&TextureViewDescriptor::default());
     }
 
-    pub fn draw(&self) {
+    pub fn handle_input(&mut self, event: &winit::event::WindowEvent) -> bool {
+        self.egui_state.on_window_event(&self.window, event).consumed
+    }
+    
+    pub fn draw(&mut self, mut run_ui: impl FnMut(&egui::Context, &mut bool)) {
         let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(SurfaceError::Timeout) => {
@@ -187,9 +216,8 @@ impl Renderer {
         });
         let mut q = Vec::new();
         q.push((self.root.clone(), Mat4::IDENTITY));
-        let vp_matrix = Camera::make_vp_matrix(
+        let vp_matrix = self.camera.make_vp_matrix(
             self.config.width as f32 / self.config.height as f32,
-            CAMERA_DISTANCE,
         );
         while let Some((node, transform_mx)) = q.pop() {
             match &node.borrow().variant {
@@ -246,6 +274,49 @@ impl Renderer {
             rpass.draw_indexed(0..n, 0, 0..1);
         }
         drop(rpass);
+        
+        // Run egui
+        let raw_input = self.egui_state.take_egui_input(&self.window);
+        let full_output = self.egui_context.run(raw_input, |ctx| {
+            run_ui(ctx, &mut self.regenerate_path);
+        });
+        
+        self.egui_state.handle_platform_output(&self.window, full_output.platform_output);
+        
+        // Render egui
+        let paint_jobs = self.egui_context.tessellate(full_output.shapes, full_output.pixels_per_point);
+        let screen_descriptor = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: self.window.scale_factor() as f32,
+        };
+        
+        for (id, image_delta) in &full_output.textures_delta.set {
+            self.egui_renderer.update_texture(&self.device, &self.queue, *id, image_delta);
+        }
+        
+        for id in &full_output.textures_delta.free {
+            self.egui_renderer.free_texture(id);
+        }
+        
+        self.egui_renderer.update_buffers(&self.device, &self.queue, &mut encoder, &paint_jobs, &screen_descriptor);
+        
+        {
+            let rpass = encoder.begin_render_pass(&RenderPassDescriptor {
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                ..Default::default()
+            });
+            let mut rpass = rpass.forget_lifetime();
+            self.egui_renderer.render(&mut rpass, &paint_jobs, &screen_descriptor);
+        }
+        
         self.queue.submit(Some(encoder.finish()));
         frame.present();
     }

@@ -19,6 +19,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::keyboard::KeyCode;
 use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
+use winit::event::{MouseButton, MouseScrollDelta};
 
 const LIGHT_RADIUS: f32 = 70.0;
 const LIGHT_INTENSITY: f32 = 200.0;
@@ -31,6 +32,9 @@ pub struct App {
     renderer: Option<Renderer>,
     lights: Vec<(NodeRef, NodeRef, u128)>,
     event_loop: Option<EventLoopProxy<Renderer>>,
+    mouse_pressed: bool,
+    last_cursor_pos: (f64, f64),
+    dragon_shader: Option<Rc<ShaderDragon>>,
 }
 
 impl App {
@@ -41,6 +45,9 @@ impl App {
             renderer: None,
             lights: Vec::new(),
             event_loop: Some(event_loop.create_proxy()),
+            mouse_pressed: false,
+            last_cursor_pos: (0.0, 0.0),
+            dragon_shader: None,
         }
     }
 }
@@ -56,6 +63,7 @@ impl App {
         let app_init_timestamp = Instant::now();
         let cube_mesh = Rc::new(Mesh::new_cube(0xcba6f7ff, &renderer.device));
         let shader = Rc::new(ShaderDragon::new(renderer));
+        self.dragon_shader = Some(shader.clone());
         let dragon_mesh = Rc::new(Mesh::load_obj(
             include_bytes!("assets/dragon-low.obj"),
             &renderer.device,
@@ -184,6 +192,13 @@ impl App {
         };
         renderer.time = time;
     }
+    
+    fn regenerate_dragon_path(&mut self) {
+        if let (Some(renderer), Some(shader)) = (self.renderer.as_ref(), self.dragon_shader.as_ref()) {
+            shader.regenerate_path(renderer);
+            log::info!("Dragon path regenerated!");
+        }
+    }
 }
 
 impl ApplicationHandler<Renderer> for App {
@@ -273,8 +288,44 @@ impl ApplicationHandler<Renderer> for App {
             log::debug!("got event {event:?}, but there is no renderer to handle that");
             return;
         };
+        // Let egui handle the event first and check if it wants to consume it
+        let egui_consumed = renderer.handle_input(&event);
+        
+        // Only process events if egui didn't consume them
         match event {
-            WindowEvent::RedrawRequested => renderer.draw(),
+            WindowEvent::RedrawRequested => {
+                // Extract camera values before the closure
+                let camera_distance = renderer.camera.distance;
+                let camera_azimuth = renderer.camera.azimuth;
+                let camera_elevation = renderer.camera.elevation;
+                
+                renderer.draw(|ctx, regenerate_path| {
+                    egui::Window::new("Debug Controls")
+                        .default_pos([10.0, 10.0])
+                        .show(ctx, |ui| {
+                            ui.heading("Camera Controls");
+                            ui.label("Drag: Rotate camera");
+                            ui.label("Scroll: Zoom in/out");
+                            ui.separator();
+                            
+                            ui.heading("Dragon Path");
+                            if ui.button("Regenerate Flying Path").clicked() {
+                                *regenerate_path = true;
+                            }
+                            ui.separator();
+                            
+                            ui.heading("Camera Settings");
+                            ui.label(format!("Distance: {:.1}", camera_distance));
+                            ui.label(format!("Azimuth: {:.2}", camera_azimuth));
+                            ui.label(format!("Elevation: {:.2}", camera_elevation));
+                        });
+                });
+                
+                if renderer.regenerate_path {
+                    renderer.regenerate_path = false;
+                    self.regenerate_dragon_path();
+                }
+            }
             WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
             WindowEvent::KeyboardInput {
                 device_id: _dev,
@@ -300,6 +351,31 @@ impl ApplicationHandler<Renderer> for App {
                         }
                     }
                     _ => {}
+                }
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if !egui_consumed && button == MouseButton::Left {
+                    self.mouse_pressed = state == ElementState::Pressed;
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                if !egui_consumed && self.mouse_pressed {
+                    let dx = (position.x - self.last_cursor_pos.0) as f32;
+                    let dy = (position.y - self.last_cursor_pos.1) as f32;
+                    renderer.camera.rotate(-dx * 0.01, -dy * 0.01);
+                }
+                self.last_cursor_pos = (position.x, position.y);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                if !egui_consumed {
+                    match delta {
+                        MouseScrollDelta::LineDelta(_, y) => {
+                            renderer.camera.zoom(-y * 0.3);
+                        }
+                        MouseScrollDelta::PixelDelta(pos) => {
+                            renderer.camera.zoom(-pos.y as f32 * 0.003);
+                        }
+                    }
                 }
             }
             _ => {}

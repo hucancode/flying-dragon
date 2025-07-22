@@ -13,6 +13,9 @@ tobj = "4.0"
 splines = { version = "4.4", features = ["glam"] }
 fern = "0.7"
 rand = "0.8.5"
+egui = "0.32"
+egui-wgpu = "0.32"
+egui-winit = "0.32"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.10"

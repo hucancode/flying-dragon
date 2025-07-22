@@ -56,8 +56,110 @@ pub struct ShaderDragon {
     pub r_buffer: Buffer,
     pub time_buffer: Buffer,
     pub light_buffer: Buffer,
+    pub displacement_buffer: Buffer,
+    pub rotation_offset_buffer: Buffer,
 }
 impl ShaderDragon {
+    fn generate_path_data() -> ([Mat4; CURVE_RESOLUTION], [Mat4; CURVE_RESOLUTION]) {
+        let seed_points_in_range = |n, max_distance| {
+            let mut last_last_point = Vec3::ZERO;
+            let mut last_point = Vec3::ONE;
+            (0..n)
+                .map(|_| {
+                    let random_point_in_front = |last_last_point: Vec3, last_point: Vec3| -> Vec3 {
+                        use rand::Rng;
+                        let mut rng = rand::thread_rng();
+                        let length: f32 = max_distance * 0.5;
+                        const MAX_RETRY: usize = 20;
+                        let mut best_direction = Vec3::ONE;
+                        let mut best_score = f32::MAX;
+                        for _ in 0..MAX_RETRY {
+                            let direction = Vec3::new(
+                                (rng.gen_range(0.0..1.0) - 0.5) * 2.0 * length,
+                                (rng.gen_range(0.0..1.0) - 0.5) * 2.0 * length,
+                                (rng.gen_range(0.0..1.0) - 0.5) * 2.0 * length,
+                            );
+                            let distance = (direction + last_point).length();
+                            let angle = direction.angle_between(last_point - last_last_point).abs();
+                            let score = angle + distance / max_distance * std::f32::consts::PI;
+                            if score < best_score {
+                                best_score = score;
+                                best_direction = direction;
+                            }
+                            if score < std::f32::consts::PI {
+                                return direction;
+                            }
+                        }
+                        best_direction
+                    };
+                    let delta = random_point_in_front(last_last_point, last_point);
+                    last_last_point = last_point;
+                    last_point += delta;
+                    last_point
+                })
+                .collect()
+        };
+        
+        let create_displacement = |points: Vec<Vec3>| {
+            let n = points.len();
+            let i0 = 1;
+            let mut d = 0.0;
+            let mut distances = vec![0.0; n];
+            for i in 1..n {
+                let j = i - 1;
+                let p1 = points[i];
+                let p2 = points[j];
+                d += p2.distance(p1);
+                distances[i] = d;
+            }
+            d += points[n - 1].distance(points[0]);
+            for distance in distances.iter_mut().skip(1) {
+                *distance /= d;
+            }
+            let distances = distances
+                .into_iter()
+                .cycle()
+                .skip(n - i0)
+                .take(n + i0 * 2 + 1);
+            let distances = distances.enumerate().map(|(i, v)| {
+                if i < i0 {
+                    v - 1.0
+                } else if i > n {
+                    v + 1.0
+                } else {
+                    v
+                }
+            });
+            let points = points.into_iter().cycle().skip(n - i0).take(n + i0 * 2 + 1);
+            let points = distances
+                .zip(points)
+                .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
+            let spline = Spline::from_iter(points);
+            let mut translation = [Mat4::IDENTITY; CURVE_RESOLUTION];
+            let mut rotation = [Mat4::IDENTITY; CURVE_RESOLUTION];
+            let normalize = |i, n| (i % n) as f32 / n as f32;
+            for i in 0..CURVE_RESOLUTION {
+                let t1 = normalize(i, CURVE_RESOLUTION);
+                let t2 = normalize(i + 1, CURVE_RESOLUTION);
+                let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
+                let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
+                let tangent = p2 - p1;
+                translation[i] = Mat4::from_translation(p1);
+                rotation[i] =
+                    Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent.normalize()));
+            }
+            (translation, rotation)
+        };
+        
+        create_displacement(seed_points_in_range(60, 4.5))
+    }
+    
+    pub fn regenerate_path(&self, renderer: &Renderer) {
+        let (displacement, rotation_offset) = Self::generate_path_data();
+        renderer.queue.write_buffer(&self.displacement_buffer, 0, bytemuck::cast_slice(&displacement));
+        renderer.queue.write_buffer(&self.rotation_offset_buffer, 0, bytemuck::cast_slice(&rotation_offset));
+    }
+    
     pub fn new(renderer: &Renderer) -> Self {
         let device = &renderer.device;
         let new_shader_timestamp = Instant::now();
@@ -94,110 +196,7 @@ impl ShaderDragon {
             bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
             push_constant_ranges: &[],
         });
-        let create_displacement = |points: Vec<Vec3>| {
-            let n = points.len();
-            let i0 = 1;
-            let mut d = 0.0;
-            let mut distances = vec![0.0; n];
-            for i in 1..n {
-                let j = i - 1;
-                let p1 = points[i];
-                let p2 = points[j];
-                d += p2.distance(p1);
-                distances[i] = d;
-            }
-            d += points[n - 1].distance(points[0]);
-            for distance in distances.iter_mut().skip(1) {
-                *distance /= d;
-            }
-            // calculate distance traveled from beginning to each point and use it as key
-            let distances = distances
-                .into_iter()
-                .cycle()
-                .skip(n - i0)
-                .take(n + i0 * 2 + 1);
-            let distances = distances.enumerate().map(|(i, v)| {
-                if i < i0 {
-                    v - 1.0
-                } else if i > n {
-                    v + 1.0
-                } else {
-                    v
-                }
-            });
-            let points = points.into_iter().cycle().skip(n - i0).take(n + i0 * 2 + 1);
-            let points = distances
-                .zip(points)
-                .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
-            let spline = Spline::from_iter(points);
-            let mut translation = [Mat4::IDENTITY; CURVE_RESOLUTION];
-            let mut rotation = [Mat4::IDENTITY; CURVE_RESOLUTION];
-            let normalize = |i, n| (i % n) as f32 / n as f32;
-            for i in 0..CURVE_RESOLUTION {
-                let t1 = normalize(i, CURVE_RESOLUTION);
-                let t2 = normalize(i + 1, CURVE_RESOLUTION);
-                let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
-                let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
-                let tangent = p2 - p1;
-                translation[i] = Mat4::from_translation(p1);
-                rotation[i] =
-                    Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent.normalize()));
-            }
-            const DOUBLE_CHECK_TRANSFORMATION: bool = false;
-            // check if there are any sudden change in translation or rotation
-            if DOUBLE_CHECK_TRANSFORMATION {
-                for i in 0..CURVE_RESOLUTION {
-                    let j = (i + 1) % CURVE_RESOLUTION;
-                    let (_, _, p1) = translation[i].to_scale_rotation_translation();
-                    let (_, _, p2) = translation[j].to_scale_rotation_translation();
-                    let (_, r1, _) = rotation[j].to_scale_rotation_translation();
-                    let (_, r2, _) = rotation[j].to_scale_rotation_translation();
-                    let dt = p2.distance(p1);
-                    let dr = r2.angle_between(r1) * 180.0 / std::f32::consts::PI;
-                    log::info!("{}: dt {:?}, dr {:?}", i, dt, dr);
-                }
-            }
-            (translation, rotation)
-        };
-        let seed_points_in_range = |n, max_distance| {
-            let mut last_last_point = Vec3::ZERO;
-            let mut last_point = Vec3::ONE;
-            (0..n)
-                .map(|_| {
-                    let random_point_in_front = |last_last_point: Vec3, last_point: Vec3| -> Vec3 {
-                        use rand::random;
-                        use std::f32::consts::PI;
-                        let length: f32 = max_distance * 0.5;
-                        const MAX_RETRY: usize = 20;
-                        let mut best_direction = Vec3::ONE;
-                        let mut best_score = f32::MAX;
-                        for _ in 0..MAX_RETRY {
-                            let direction = Vec3::new(
-                                (random::<f32>() - 0.5) * 2.0 * length,
-                                (random::<f32>() - 0.5) * 2.0 * length,
-                                (random::<f32>() - 0.5) * 2.0 * length,
-                            );
-                            let distance = (direction + last_point).length();
-                            let angle = direction.angle_between(last_point - last_last_point).abs();
-                            let score = angle + distance / max_distance * PI;
-                            if score < best_score {
-                                best_score = score;
-                                best_direction = direction;
-                            }
-                            if score < PI {
-                                return direction;
-                            }
-                        }
-                        best_direction
-                    };
-                    let delta = random_point_in_front(last_last_point, last_point);
-                    last_last_point = last_point;
-                    last_point += delta;
-                    last_point
-                })
-                .collect()
-        };
-        let (displacement, rotation_offset) = create_displacement(seed_points_in_range(60, 4.5));
+        let (displacement, rotation_offset) = Self::generate_path_data();
         // log::info!("{:?}", texels);
         let displacement_buffer =
             renderer.create_buffer_init(bytemuck::cast_slice(&displacement), BufferUsages::STORAGE);
@@ -312,6 +311,8 @@ impl ShaderDragon {
             r_buffer,
             time_buffer,
             light_buffer,
+            displacement_buffer,
+            rotation_offset_buffer,
         }
     }
 }

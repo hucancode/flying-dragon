@@ -68,16 +68,16 @@ impl ShaderDragon {
                 .map(|_| {
                     let random_point_in_front = |last_last_point: Vec3, last_point: Vec3| -> Vec3 {
                         use rand::Rng;
-                        let mut rng = rand::thread_rng();
+                        let mut rng = rand::rng();
                         let length: f32 = max_distance * 0.5;
                         const MAX_RETRY: usize = 20;
                         let mut best_direction = Vec3::ONE;
                         let mut best_score = f32::MAX;
                         for _ in 0..MAX_RETRY {
                             let direction = Vec3::new(
-                                (rng.gen_range(0.0..1.0) - 0.5) * 2.0 * length,
-                                (rng.gen_range(0.0..1.0) - 0.5) * 2.0 * length,
-                                (rng.gen_range(0.0..1.0) - 0.5) * 2.0 * length,
+                                (rng.random_range(0.0..1.0) - 0.5) * 2.0 * length,
+                                (rng.random_range(0.0..1.0) - 0.5) * 2.0 * length,
+                                (rng.random_range(0.0..1.0) - 0.5) * 2.0 * length,
                             );
                             let distance = (direction + last_point).length();
                             let angle = direction.angle_between(last_point - last_last_point).abs();

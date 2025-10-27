@@ -9,15 +9,10 @@ use std::time::Instant;
 use web_time::Instant;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, align_to};
 use wgpu::{
-    BackendOptions, Backends, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color,
-    CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, IndexFormat, Instance,
-    InstanceDescriptor, InstanceFlags, Limits, LoadOp, Operations, Queue,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    BackendOptions, Backends, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d, IndexFormat, Instance, InstanceDescriptor, InstanceFlags, Limits, LoadOp, MemoryBudgetThresholds, Operations, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor
 };
 use winit::window::Window;
-use egui_wgpu::Renderer as EguiRenderer;
+use egui_wgpu::{Renderer as EguiRenderer, RendererOptions};
 use egui_winit::State as EguiState;
 use egui::{Context};
 
@@ -63,6 +58,7 @@ impl Renderer {
             backends: Backends::all(),
             flags: InstanceFlags::from_env_or_default(),
             backend_options: BackendOptions::from_env_or_default(),
+            memory_budget_thresholds: MemoryBudgetThresholds::default(),
         });
         let surface = instance.create_surface(window.clone()).unwrap();
         log::info!(
@@ -117,7 +113,7 @@ impl Renderer {
             "in total, created new renderer in {:?}",
             new_renderer_timestamp.elapsed()
         );
-        
+
         let egui_context = Context::default();
         let viewport_id = egui_context.viewport_id();
         let egui_state = EguiState::new(
@@ -128,8 +124,8 @@ impl Renderer {
             None,
             None,
         );
-        let egui_renderer = EguiRenderer::new(&device, config.format, None, 1, true);
-        
+        let egui_renderer = EguiRenderer::new(&device, config.format, RendererOptions::default());
+
         Self {
             camera: Camera::new(),
             root: Node::new(),
@@ -171,7 +167,7 @@ impl Renderer {
     pub fn handle_input(&mut self, event: &winit::event::WindowEvent) -> bool {
         self.egui_state.on_window_event(&self.window, event).consumed
     }
-    
+
     pub fn draw(&mut self, mut run_ui: impl FnMut(&egui::Context, &mut bool)) {
         let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
@@ -203,6 +199,7 @@ impl Renderer {
                     load: LoadOp::Clear(CLEAR_COLOR),
                     store: StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &self.depth_texture_view,
@@ -274,32 +271,32 @@ impl Renderer {
             rpass.draw_indexed(0..n, 0, 0..1);
         }
         drop(rpass);
-        
+
         // Run egui
         let raw_input = self.egui_state.take_egui_input(&self.window);
         let full_output = self.egui_context.run(raw_input, |ctx| {
             run_ui(ctx, &mut self.regenerate_path);
         });
-        
+
         self.egui_state.handle_platform_output(&self.window, full_output.platform_output);
-        
+
         // Render egui
         let paint_jobs = self.egui_context.tessellate(full_output.shapes, full_output.pixels_per_point);
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [self.config.width, self.config.height],
             pixels_per_point: self.window.scale_factor() as f32,
         };
-        
+
         for (id, image_delta) in &full_output.textures_delta.set {
             self.egui_renderer.update_texture(&self.device, &self.queue, *id, image_delta);
         }
-        
+
         for id in &full_output.textures_delta.free {
             self.egui_renderer.free_texture(id);
         }
-        
+
         self.egui_renderer.update_buffers(&self.device, &self.queue, &mut encoder, &paint_jobs, &screen_descriptor);
-        
+
         {
             let rpass = encoder.begin_render_pass(&RenderPassDescriptor {
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -309,6 +306,7 @@ impl Renderer {
                         load: LoadOp::Load,
                         store: StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 ..Default::default()
@@ -316,7 +314,7 @@ impl Renderer {
             let mut rpass = rpass.forget_lifetime();
             self.egui_renderer.render(&mut rpass, &paint_jobs, &screen_descriptor);
         }
-        
+
         self.queue.submit(Some(encoder.finish()));
         frame.present();
     }

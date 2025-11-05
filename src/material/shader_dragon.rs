@@ -23,6 +23,14 @@ use wgpu::{
 
 const CURVE_RESOLUTION: usize = 1024;
 const CURVE_SCALE: f32 = 15.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathPattern {
+    Random,
+    Circle,
+    Infinity,
+    Sphere,
+}
 const BIND_GROUP_CAMERA: [(ShaderStages, BufferBindingType, bool); 3] = [
     (ShaderStages::VERTEX, BufferBindingType::Uniform, false),
     (
@@ -32,7 +40,7 @@ const BIND_GROUP_CAMERA: [(ShaderStages, BufferBindingType, bool); 3] = [
     ),
     (ShaderStages::FRAGMENT, BufferBindingType::Uniform, false), // light_count
 ];
-const BIND_GROUP_NODE: [(ShaderStages, BufferBindingType, bool); 5] = [
+const BIND_GROUP_NODE: [(ShaderStages, BufferBindingType, bool); 6] = [
     (ShaderStages::VERTEX, BufferBindingType::Uniform, true),
     (ShaderStages::VERTEX, BufferBindingType::Uniform, true),
     (
@@ -42,6 +50,7 @@ const BIND_GROUP_NODE: [(ShaderStages, BufferBindingType, bool); 5] = [
     ),
     (ShaderStages::VERTEX, BufferBindingType::Uniform, false), // time
     (ShaderStages::VERTEX, BufferBindingType::Uniform, false), // combined_transform_map_length
+    (ShaderStages::VERTEX, BufferBindingType::Uniform, false), // path_length
 ];
 
 pub struct ShaderDragon {
@@ -55,10 +64,20 @@ pub struct ShaderDragon {
     pub light_buffer: Buffer,
     pub light_count_buffer: Buffer,
     pub combined_transform_buffer: Buffer,
+    pub path_length_buffer: Buffer,
     // transform_length_buffer: Buffer,
 }
 impl ShaderDragon {
-    fn generate_path_data() -> [Mat4; CURVE_RESOLUTION] {
+    fn generate_path_data(pattern: PathPattern) -> ([Mat4; CURVE_RESOLUTION], f32) {
+        match pattern {
+            PathPattern::Random => Self::generate_random_path(),
+            PathPattern::Circle => Self::generate_circle_path(),
+            PathPattern::Infinity => Self::generate_infinity_path(),
+            PathPattern::Sphere => Self::generate_sphere_path(),
+        }
+    }
+
+    fn generate_random_path() -> ([Mat4; CURVE_RESOLUTION], f32) {
         let seed_points_in_range = |n, max_distance| {
             let mut last_last_point = Vec3::ZERO;
             let mut last_point = Vec3::ONE;
@@ -133,6 +152,7 @@ impl ShaderDragon {
                 .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
             let spline = Spline::from_iter(points);
             let mut combined_transforms = [Mat4::IDENTITY; CURVE_RESOLUTION];
+            let mut path_length = 0.0f32;
             let normalize = |i, n| (i % n) as f32 / n as f32;
             for i in 0..CURVE_RESOLUTION {
                 let t1 = normalize(i, CURVE_RESOLUTION);
@@ -140,18 +160,139 @@ impl ShaderDragon {
                 let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
                 let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
                 let tangent = p2 - p1;
+                path_length += tangent.length();
                 let translation = Mat4::from_translation(p1);
                 let rotation = Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent.normalize()));
                 combined_transforms[i] = translation * rotation;
             }
-            return combined_transforms;
+            (combined_transforms, path_length)
         };
         create_combined_transforms(seed_points_in_range(60, 4.5))
     }
 
-    pub fn regenerate_path(&self, renderer: &Renderer) {
-        let combined_transforms = Self::generate_path_data();
+    fn generate_circle_path() -> ([Mat4; CURVE_RESOLUTION], f32) {
+        let radius = 30.0;
+        let mut combined_transforms = [Mat4::IDENTITY; CURVE_RESOLUTION];
+        let mut path_length = 0.0f32;
+
+        for i in 0..CURVE_RESOLUTION {
+            let t = (i as f32 / CURVE_RESOLUTION as f32) * std::f32::consts::TAU;
+            let next_t = ((i + 1) as f32 / CURVE_RESOLUTION as f32) * std::f32::consts::TAU;
+
+            // Circle on XZ plane (Y is up)
+            let x = t.cos() * radius;
+            let z = t.sin() * radius;
+            let y = 0.0;
+
+            let next_x = next_t.cos() * radius;
+            let next_z = next_t.sin() * radius;
+            let next_y = 0.0;
+
+            let pos = Vec3::new(x, y, z);
+            let next_pos = Vec3::new(next_x, next_y, next_z);
+            path_length += (next_pos - pos).length();
+            let tangent = (next_pos - pos).normalize_or_zero();
+            let tangent = if tangent.length_squared() < 0.001 { Vec3::X } else { tangent };
+
+            let translation = Mat4::from_translation(pos);
+            let rotation = Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent));
+            combined_transforms[i] = translation * rotation;
+        }
+
+        (combined_transforms, path_length)
+    }
+
+    fn generate_infinity_path() -> ([Mat4; CURVE_RESOLUTION], f32) {
+        let scale = 40.0;
+        let mut combined_transforms = [Mat4::IDENTITY; CURVE_RESOLUTION];
+        let mut path_length = 0.0f32;
+
+        for i in 0..CURVE_RESOLUTION {
+            let t = (i as f32 / CURVE_RESOLUTION as f32) * std::f32::consts::TAU;
+            let next_t = ((i + 1) as f32 / CURVE_RESOLUTION as f32) * std::f32::consts::TAU;
+
+            // Lemniscate of Bernoulli (infinity symbol)
+            // x = a * cos(t) / (1 + sin²(t))
+            // z = a * sin(t) * cos(t) / (1 + sin²(t))
+            let compute_pos = |angle: f32| -> Vec3 {
+                let sin_t = angle.sin();
+                let cos_t = angle.cos();
+                let denom = 1.0 + sin_t * sin_t;
+                Vec3::new(
+                    scale * cos_t / denom,
+                    0.0,
+                    scale * sin_t * cos_t / denom
+                )
+            };
+
+            let pos = compute_pos(t);
+            let next_pos = compute_pos(next_t);
+            path_length += (next_pos - pos).length();
+            let tangent = (next_pos - pos).normalize_or_zero();
+            let tangent = if tangent.length_squared() < 0.001 { Vec3::X } else { tangent };
+
+            let translation = Mat4::from_translation(pos);
+            let rotation = Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent));
+            combined_transforms[i] = translation * rotation;
+        }
+
+        (combined_transforms, path_length)
+    }
+
+    fn generate_sphere_path() -> ([Mat4; CURVE_RESOLUTION], f32) {
+        let radius = 30.0;
+        let mut combined_transforms = [Mat4::IDENTITY; CURVE_RESOLUTION];
+        let mut path_length = 0.0f32;
+
+        for i in 0..CURVE_RESOLUTION {
+            let progress = i as f32 / CURVE_RESOLUTION as f32;
+
+            // Use a sine wave to smoothly oscillate from bottom to top and back
+            // This creates a smooth vertical motion that avoids pole clustering
+            // The value oscillates: -1 -> 1 -> -1 (bottom -> top -> bottom)
+            let vertical_motion = (progress * std::f32::consts::TAU * 2.0).sin(); // 2 full oscillations
+
+            // Convert to latitude angle, avoiding the poles by limiting the range
+            // Map from [-1, 1] to [π/6, 5π/6] to avoid poles (30° to 150°)
+            let phi = std::f32::consts::PI * 0.5 + vertical_motion * std::f32::consts::PI * 0.33;
+
+            // Longitude rotates continuously
+            let theta = progress * std::f32::consts::TAU * 8.0; // 8 wraps around the sphere
+
+            // Next point
+            let next_progress = (i + 1) as f32 / CURVE_RESOLUTION as f32;
+            let next_vertical_motion = (next_progress * std::f32::consts::TAU * 2.0).sin();
+            let next_phi = std::f32::consts::PI * 0.5 + next_vertical_motion * std::f32::consts::PI * 0.33;
+            let next_theta = next_progress * std::f32::consts::TAU * 8.0;
+
+            // Spherical coordinates: x = r*sin(phi)*cos(theta), y = r*cos(phi), z = r*sin(phi)*sin(theta)
+            let compute_pos = |longitude: f32, latitude: f32| -> Vec3 {
+                Vec3::new(
+                    radius * latitude.sin() * longitude.cos(),
+                    radius * latitude.cos(),
+                    radius * latitude.sin() * longitude.sin()
+                )
+            };
+
+            let pos = compute_pos(theta, phi);
+            let next_pos = compute_pos(next_theta, next_phi);
+            path_length += (next_pos - pos).length();
+            let tangent = (next_pos - pos).normalize_or_zero();
+            let tangent = if tangent.length_squared() < 0.001 { Vec3::X } else { tangent };
+
+            let translation = Mat4::from_translation(pos);
+            let rotation = Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent));
+            combined_transforms[i] = translation * rotation;
+        }
+
+        (combined_transforms, path_length)
+    }
+
+    pub fn regenerate_path(&self, renderer: &Renderer, pattern: PathPattern) {
+        let (combined_transforms, path_length) = Self::generate_path_data(pattern);
         renderer.queue.write_buffer(&self.combined_transform_buffer, 0, bytemuck::cast_slice(&combined_transforms));
+        renderer.queue.write_buffer(&self.path_length_buffer, 0, bytemuck::bytes_of(&path_length));
+        log::info!("Path length for {:?}: {:.2}", pattern, path_length);
     }
 
     pub fn new(renderer: &Renderer) -> Self {
@@ -190,9 +331,10 @@ impl ShaderDragon {
             bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
             push_constant_ranges: &[],
         });
-        let combined_transforms = Self::generate_path_data();
+        let (combined_transforms, path_length) = Self::generate_path_data(PathPattern::Random);
         let combined_transform_buffer =
             renderer.create_buffer_init(bytemuck::cast_slice(&combined_transforms), BufferUsages::STORAGE);
+        let path_length_buffer = renderer.create_buffer_init(bytemuck::bytes_of(&path_length), BufferUsages::UNIFORM);
         let time_buffer = renderer.create_buffer(size_of::<f32>() as u64, BufferUsages::UNIFORM);
         let vp_buffer = renderer.create_buffer_init(
             bytemuck::cast_slice(Mat4::IDENTITY.as_ref()),
@@ -258,6 +400,10 @@ impl ShaderDragon {
                     binding: 4, // combined_transform_map_length
                     resource: transform_length_buffer.as_entire_binding(),
                 },
+                BindGroupEntry {
+                    binding: 5, // path_length
+                    resource: path_length_buffer.as_entire_binding(),
+                },
             ],
             label: None,
         });
@@ -310,6 +456,7 @@ impl ShaderDragon {
             light_buffer,
             light_count_buffer,
             combined_transform_buffer,
+            path_length_buffer,
             // transform_length_buffer,
         }
     }

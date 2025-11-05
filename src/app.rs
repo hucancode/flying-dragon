@@ -1,5 +1,5 @@
 use crate::geometry::Mesh;
-use crate::material::ShaderDragon;
+use crate::material::{ShaderDragon, PathPattern};
 use crate::material::ShaderLit;
 use crate::material::ShaderUnlit;
 use crate::world::{Node, NodeRef, Renderer};
@@ -19,7 +19,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::keyboard::KeyCode;
 use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
-use winit::event::{MouseButton, MouseScrollDelta};
+use winit::event::MouseScrollDelta;
 
 const LIGHT_RADIUS: f32 = 70.0;
 const LIGHT_INTENSITY: f32 = 200.0;
@@ -32,9 +32,8 @@ pub struct App {
     renderer: Option<Renderer>,
     lights: Vec<(NodeRef, NodeRef, u128)>,
     event_loop: Option<EventLoopProxy<Renderer>>,
-    mouse_pressed: bool,
-    last_cursor_pos: (f64, f64),
     dragon_shader: Option<Rc<ShaderDragon>>,
+    selected_pattern: PathPattern,
 }
 
 impl App {
@@ -45,9 +44,8 @@ impl App {
             renderer: None,
             lights: Vec::new(),
             event_loop: Some(event_loop.create_proxy()),
-            mouse_pressed: false,
-            last_cursor_pos: (0.0, 0.0),
             dragon_shader: None,
+            selected_pattern: PathPattern::Random,
         }
     }
 }
@@ -195,8 +193,8 @@ impl App {
 
     fn regenerate_dragon_path(&mut self) {
         if let (Some(renderer), Some(shader)) = (self.renderer.as_ref(), self.dragon_shader.as_ref()) {
-            shader.regenerate_path(renderer);
-            log::info!("Dragon path regenerated!");
+            shader.regenerate_path(renderer, self.selected_pattern);
+            log::info!("Dragon path regenerated with pattern: {:?}", self.selected_pattern);
         }
     }
 }
@@ -302,13 +300,30 @@ impl ApplicationHandler<Renderer> for App {
                         .default_pos([10.0, 10.0])
                         .show(ctx, |ui| {
                             ui.heading("Camera Controls");
-                            ui.label("Drag: Rotate camera");
                             ui.label("Scroll: Zoom in/out");
                             ui.separator();
                             ui.heading("Dragon Path");
-                            if ui.button("Regenerate Flying Path").clicked() {
-                                *regenerate_path = true;
-                            }
+                            ui.label(format!("Current Pattern: {:?}", self.selected_pattern));
+                            ui.horizontal(|ui| {
+                                if ui.button("Random").clicked() {
+                                    self.selected_pattern = PathPattern::Random;
+                                    *regenerate_path = true;
+                                }
+                                if ui.button("Circle").clicked() {
+                                    self.selected_pattern = PathPattern::Circle;
+                                    *regenerate_path = true;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                if ui.button("Infinity (∞)").clicked() {
+                                    self.selected_pattern = PathPattern::Infinity;
+                                    *regenerate_path = true;
+                                }
+                                if ui.button("Sphere").clicked() {
+                                    self.selected_pattern = PathPattern::Sphere;
+                                    *regenerate_path = true;
+                                }
+                            });
                             ui.separator();
                             ui.heading("Camera Settings");
                             ui.label(format!("Distance: {:.1}", camera_distance));
@@ -348,19 +363,6 @@ impl ApplicationHandler<Renderer> for App {
                     }
                     _ => {}
                 }
-            }
-            WindowEvent::MouseInput { state, button, .. } => {
-                if !egui_consumed && button == MouseButton::Left {
-                    self.mouse_pressed = state == ElementState::Pressed;
-                }
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                if !egui_consumed && self.mouse_pressed {
-                    let dx = (position.x - self.last_cursor_pos.0) as f32;
-                    let dy = (position.y - self.last_cursor_pos.1) as f32;
-                    renderer.camera.rotate(-dx * 0.01, -dy * 0.01);
-                }
-                self.last_cursor_pos = (position.x, position.y);
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 if !egui_consumed {

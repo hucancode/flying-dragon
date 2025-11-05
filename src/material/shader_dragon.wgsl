@@ -1,5 +1,4 @@
 const PI = 3.14159;
-const PATH_LEN = 2000.0;
 const SPEED = 0.07;
 
 struct VertexInput {
@@ -29,6 +28,8 @@ var<storage> combined_transform_map: array<mat4x4<f32>>;
 var<uniform> time: f32;
 @group(0) @binding(4)
 var<uniform> combined_transform_map_length: u32;
+@group(0) @binding(5)
+var<uniform> path_length: f32;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
 @group(1) @binding(1)
@@ -40,7 +41,7 @@ var<uniform> light_count: u32;
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
     let n = combined_transform_map_length;
-    let u = (input.position.x + time*SPEED)/PATH_LEN*f32(n)+f32(n);
+    let u = (input.position.x + time*SPEED)/path_length*f32(n)+f32(n);
     let u_low = u32(floor(u))%n;
     let u_high = u32(ceil(u))%n;
     let k = fract(u) + step(fract(u), 0.0);

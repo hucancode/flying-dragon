@@ -279,6 +279,12 @@ impl ApplicationHandler<Renderer> for App {
     ) {
         if event == WindowEvent::CloseRequested {
             log::debug!("window close requested");
+            // explicitly drop all GPU resources to avoid accidental calls
+            self.dragon_shader = None;
+            self.lights.clear();
+            self.renderer = None;
+            self.window = None;
+            log::debug!("resources cleaned up, exiting");
             event_loop.exit();
             return;
         }

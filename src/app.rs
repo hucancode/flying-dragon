@@ -192,7 +192,7 @@ impl App {
         };
         renderer.time = time;
     }
-    
+
     fn regenerate_dragon_path(&mut self) {
         if let (Some(renderer), Some(shader)) = (self.renderer.as_ref(), self.dragon_shader.as_ref()) {
             shader.regenerate_path(renderer);
@@ -290,7 +290,6 @@ impl ApplicationHandler<Renderer> for App {
         };
         // Let egui handle the event first and check if it wants to consume it
         let egui_consumed = renderer.handle_input(&event);
-        
         // Only process events if egui didn't consume them
         match event {
             WindowEvent::RedrawRequested => {
@@ -298,7 +297,6 @@ impl ApplicationHandler<Renderer> for App {
                 let camera_distance = renderer.camera.distance;
                 let camera_azimuth = renderer.camera.azimuth;
                 let camera_elevation = renderer.camera.elevation;
-                
                 renderer.draw(|ctx, regenerate_path| {
                     egui::Window::new("Debug Controls")
                         .default_pos([10.0, 10.0])
@@ -307,20 +305,18 @@ impl ApplicationHandler<Renderer> for App {
                             ui.label("Drag: Rotate camera");
                             ui.label("Scroll: Zoom in/out");
                             ui.separator();
-                            
                             ui.heading("Dragon Path");
                             if ui.button("Regenerate Flying Path").clicked() {
                                 *regenerate_path = true;
                             }
                             ui.separator();
-                            
                             ui.heading("Camera Settings");
                             ui.label(format!("Distance: {:.1}", camera_distance));
                             ui.label(format!("Azimuth: {:.2}", camera_azimuth));
                             ui.label(format!("Elevation: {:.2}", camera_elevation));
                         });
                 });
-                
+
                 if renderer.regenerate_path {
                     renderer.regenerate_path = false;
                     self.regenerate_dragon_path();

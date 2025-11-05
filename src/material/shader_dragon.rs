@@ -23,13 +23,14 @@ use wgpu::{
 
 const CURVE_RESOLUTION: usize = 1024;
 const CURVE_SCALE: f32 = 15.0;
-const BIND_GROUP_CAMERA: [(ShaderStages, BufferBindingType, bool); 2] = [
+const BIND_GROUP_CAMERA: [(ShaderStages, BufferBindingType, bool); 3] = [
     (ShaderStages::VERTEX, BufferBindingType::Uniform, false),
     (
         ShaderStages::FRAGMENT,
         BufferBindingType::Storage { read_only: true },
         false,
     ),
+    (ShaderStages::FRAGMENT, BufferBindingType::Uniform, false), // light_count
 ];
 const BIND_GROUP_NODE: [(ShaderStages, BufferBindingType, bool); 5] = [
     (ShaderStages::VERTEX, BufferBindingType::Uniform, true),
@@ -39,12 +40,8 @@ const BIND_GROUP_NODE: [(ShaderStages, BufferBindingType, bool); 5] = [
         BufferBindingType::Storage { read_only: true },
         false,
     ),
-    (
-        ShaderStages::VERTEX,
-        BufferBindingType::Storage { read_only: true },
-        false,
-    ),
-    (ShaderStages::VERTEX, BufferBindingType::Uniform, false),
+    (ShaderStages::VERTEX, BufferBindingType::Uniform, false), // time
+    (ShaderStages::VERTEX, BufferBindingType::Uniform, false), // combined_transform_map_length
 ];
 
 pub struct ShaderDragon {
@@ -56,11 +53,12 @@ pub struct ShaderDragon {
     pub r_buffer: Buffer,
     pub time_buffer: Buffer,
     pub light_buffer: Buffer,
-    pub displacement_buffer: Buffer,
-    pub rotation_offset_buffer: Buffer,
+    pub light_count_buffer: Buffer,
+    pub combined_transform_buffer: Buffer,
+    // transform_length_buffer: Buffer,
 }
 impl ShaderDragon {
-    fn generate_path_data() -> ([Mat4; CURVE_RESOLUTION], [Mat4; CURVE_RESOLUTION]) {
+    fn generate_path_data() -> [Mat4; CURVE_RESOLUTION] {
         let seed_points_in_range = |n, max_distance| {
             let mut last_last_point = Vec3::ZERO;
             let mut last_point = Vec3::ONE;
@@ -99,8 +97,7 @@ impl ShaderDragon {
                 })
                 .collect()
         };
-        
-        let create_displacement = |points: Vec<Vec3>| {
+        let create_combined_transforms = |points: Vec<Vec3>| {
             let n = points.len();
             let i0 = 1;
             let mut d = 0.0;
@@ -135,8 +132,7 @@ impl ShaderDragon {
                 .zip(points)
                 .map(|(k, v)| Key::new(k, v, Interpolation::CatmullRom));
             let spline = Spline::from_iter(points);
-            let mut translation = [Mat4::IDENTITY; CURVE_RESOLUTION];
-            let mut rotation = [Mat4::IDENTITY; CURVE_RESOLUTION];
+            let mut combined_transforms = [Mat4::IDENTITY; CURVE_RESOLUTION];
             let normalize = |i, n| (i % n) as f32 / n as f32;
             for i in 0..CURVE_RESOLUTION {
                 let t1 = normalize(i, CURVE_RESOLUTION);
@@ -144,22 +140,20 @@ impl ShaderDragon {
                 let p1 = spline.clamped_sample(t1).unwrap_or_default() * CURVE_SCALE;
                 let p2 = spline.clamped_sample(t2).unwrap_or_default() * CURVE_SCALE;
                 let tangent = p2 - p1;
-                translation[i] = Mat4::from_translation(p1);
-                rotation[i] =
-                    Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent.normalize()));
+                let translation = Mat4::from_translation(p1);
+                let rotation = Mat4::from_quat(Quat::from_rotation_arc(Vec3::X, tangent.normalize()));
+                combined_transforms[i] = translation * rotation;
             }
-            (translation, rotation)
+            return combined_transforms;
         };
-        
-        create_displacement(seed_points_in_range(60, 4.5))
+        create_combined_transforms(seed_points_in_range(60, 4.5))
     }
-    
+
     pub fn regenerate_path(&self, renderer: &Renderer) {
-        let (displacement, rotation_offset) = Self::generate_path_data();
-        renderer.queue.write_buffer(&self.displacement_buffer, 0, bytemuck::cast_slice(&displacement));
-        renderer.queue.write_buffer(&self.rotation_offset_buffer, 0, bytemuck::cast_slice(&rotation_offset));
+        let combined_transforms = Self::generate_path_data();
+        renderer.queue.write_buffer(&self.combined_transform_buffer, 0, bytemuck::cast_slice(&combined_transforms));
     }
-    
+
     pub fn new(renderer: &Renderer) -> Self {
         let device = &renderer.device;
         let new_shader_timestamp = Instant::now();
@@ -196,14 +190,9 @@ impl ShaderDragon {
             bind_group_layouts: &[&bind_group_layout_node, &bind_group_layout_camera],
             push_constant_ranges: &[],
         });
-        let (displacement, rotation_offset) = Self::generate_path_data();
-        // log::info!("{:?}", texels);
-        let displacement_buffer =
-            renderer.create_buffer_init(bytemuck::cast_slice(&displacement), BufferUsages::STORAGE);
-        let rotation_offset_buffer = renderer.create_buffer_init(
-            bytemuck::cast_slice(&rotation_offset),
-            BufferUsages::STORAGE,
-        );
+        let combined_transforms = Self::generate_path_data();
+        let combined_transform_buffer =
+            renderer.create_buffer_init(bytemuck::cast_slice(&combined_transforms), BufferUsages::STORAGE);
         let time_buffer = renderer.create_buffer(size_of::<f32>() as u64, BufferUsages::UNIFORM);
         let vp_buffer = renderer.create_buffer_init(
             bytemuck::cast_slice(Mat4::IDENTITY.as_ref()),
@@ -213,6 +202,7 @@ impl ShaderDragon {
             MAX_LIGHT * size_of::<Light>() as BufferAddress,
             BufferUsages::STORAGE,
         );
+        let light_count_buffer = renderer.create_buffer(size_of::<u32>() as u64, BufferUsages::UNIFORM);
         let bind_group_camera = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_camera,
             entries: &[
@@ -224,6 +214,10 @@ impl ShaderDragon {
                     binding: 1,
                     resource: light_buffer.as_entire_binding(),
                 },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: light_count_buffer.as_entire_binding(),
+                },
             ],
             label: None,
         });
@@ -232,6 +226,7 @@ impl ShaderDragon {
             renderer.create_buffer(MAX_ENTITY * align(node_uniform_size), BufferUsages::UNIFORM);
         let r_buffer =
             renderer.create_buffer(MAX_ENTITY * align(node_uniform_size), BufferUsages::UNIFORM);
+        let transform_length_buffer = renderer.create_buffer(size_of::<u32>() as u64, BufferUsages::UNIFORM);
         let bind_group_node = device.create_bind_group(&BindGroupDescriptor {
             layout: &bind_group_layout_node,
             entries: &[
@@ -252,16 +247,16 @@ impl ShaderDragon {
                     }),
                 },
                 BindGroupEntry {
-                    binding: 2, // displacement
-                    resource: displacement_buffer.as_entire_binding(),
+                    binding: 2, // combined_transform_map
+                    resource: combined_transform_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
-                    binding: 3, // rotation offset
-                    resource: rotation_offset_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 4, // time
+                    binding: 3, // time
                     resource: time_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 4, // combined_transform_map_length
+                    resource: transform_length_buffer.as_entire_binding(),
                 },
             ],
             label: None,
@@ -302,6 +297,8 @@ impl ShaderDragon {
             cache: None,
         });
         log::info!("created shader in {:?}", new_shader_timestamp.elapsed());
+        renderer.queue.write_buffer(&transform_length_buffer, 0, bytemuck::bytes_of(&(CURVE_RESOLUTION as u32)));
+
         Self {
             render_pipeline,
             bind_group_camera,
@@ -311,8 +308,9 @@ impl ShaderDragon {
             r_buffer,
             time_buffer,
             light_buffer,
-            displacement_buffer,
-            rotation_offset_buffer,
+            light_count_buffer,
+            combined_transform_buffer,
+            // transform_length_buffer,
         }
     }
 }
@@ -337,5 +335,6 @@ impl Shader for ShaderDragon {
     }
     fn write_light_data(&self, queue: &Queue, lights: &[Light]) {
         queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(lights));
+        queue.write_buffer(&self.light_count_buffer, 0, bytemuck::bytes_of(&(lights.len() as u32)));
     }
 }

@@ -1,4 +1,3 @@
-const MAX_LIGHT = 10;
 const PI = 3.14159;
 const PATH_LEN = 2000.0;
 const SPEED = 0.07;
@@ -25,35 +24,36 @@ var<uniform> world: mat4x4<f32>;
 @group(0) @binding(1)
 var<uniform> rotation: mat4x4<f32>;
 @group(0) @binding(2)
-var<storage> displacement_map: array<mat4x4<f32>>;
+var<storage> combined_transform_map: array<mat4x4<f32>>;
 @group(0) @binding(3)
-var<storage> rotation_offset_map: array<mat4x4<f32>>;
-@group(0) @binding(4)
 var<uniform> time: f32;
+@group(0) @binding(4)
+var<uniform> combined_transform_map_length: u32;
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
 @group(1) @binding(1)
 var<storage> lights: array<Light>;
+@group(1) @binding(2)
+var<uniform> light_count: u32;
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var result: VertexOutput;
-    let n = arrayLength(&displacement_map);
+    let n = combined_transform_map_length;
     let u = (input.position.x + time*SPEED)/PATH_LEN*f32(n)+f32(n);
     let u_low = u32(floor(u))%n;
     let u_high = u32(ceil(u))%n;
-    var k = fract(u);
-    if (k < 0.0) {
-        k += 1.0;
-    }
-    let translation_low = displacement_map[u_low];
-    let translation_high = displacement_map[u_high];
-    let rotation_low = rotation_offset_map[u_low];
-    let rotation_high = rotation_offset_map[u_high];
-    let pos = vec4f(0.0, input.position.y, input.position.z, input.position.w);
-    result.world_position = world * mix(translation_low * rotation_low * pos, translation_high * rotation_high * pos, k);
+    let k = fract(u) + step(fract(u), 0.0);
+    let combined_low = combined_transform_map[u_low];
+    let combined_high = combined_transform_map[u_high];
+    let pos = vec4(0.0, input.position.yz, 1.0);
+    let transformed_low = combined_low * pos;
+    let transformed_high = combined_high * pos;
+    result.world_position = world * mix(transformed_low, transformed_high, k);
     result.position = view_proj * result.world_position;
-    result.normal = rotation * mix(rotation_low * input.normal, rotation_high * input.normal, k);
+    let normal_low = combined_low * vec4(input.normal.xyz, 0.0);
+    let normal_high = combined_high * vec4(input.normal.xyz, 0.0);
+    result.normal = rotation * mix(normal_low, normal_high, k);
     result.color = input.color;
     return result;
 }
@@ -75,10 +75,9 @@ fn vs_main_circle(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let n = arrayLength(&lights);
     var light_color = vec3(0.0);
     let ambient = vec3(0.02, 0.02, 0.01);
-    for (var i = 0u; i < n; i++) {
+    for (var i = 0u; i < light_count; i++) {
         let pos = lights[i].position;
         let r = lights[i].radius;
         let c = lights[i].color.rgb;

@@ -21,8 +21,8 @@ use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
 use winit::event::MouseScrollDelta;
 
-const LIGHT_RADIUS: f32 = 70.0;
-const LIGHT_INTENSITY: f32 = 200.0;
+const LIGHT_RADIUS: f32 = 100.0;
+const LIGHT_INTENSITY: f32 = 150.0;
 const WINDOW_WIDTH: u32 = 1024;
 const WINDOW_HEIGHT: u32 = 768;
 
@@ -73,9 +73,9 @@ impl App {
             (
                 wgpu::Color {
                     r: 1.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.5,
+                    g: 1.0,
+                    b: 1.0,
+                    a: 1.0,
                 },
                 LIGHT_RADIUS,
                 LIGHT_INTENSITY,
@@ -83,25 +83,36 @@ impl App {
             ),
             (
                 wgpu::Color {
-                    r: 0.0,
-                    g: 1.0,
-                    b: 0.0,
-                    a: 0.5,
+                    r: 1.0,
+                    g: 0.8,
+                    b: 0.5,
+                    a: 0.8,
                 },
                 LIGHT_RADIUS,
                 LIGHT_INTENSITY,
-                2200,
+                1000,
             ),
             (
                 wgpu::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 1.0,
-                    a: 0.5,
+                    r: 0.4,
+                    g: 1.0,
+                    b: 0.7,
+                    a: 0.8,
                 },
                 LIGHT_RADIUS,
                 LIGHT_INTENSITY,
-                4400,
+                4200,
+            ),
+            (
+                wgpu::Color {
+                    r: 0.5,
+                    g: 0.8,
+                    b: 1.0,
+                    a: 0.8,
+                },
+                LIGHT_RADIUS,
+                LIGHT_INTENSITY,
+                8400,
             ),
         ];
         let shader_lit = Rc::new(ShaderLit::new(renderer));
